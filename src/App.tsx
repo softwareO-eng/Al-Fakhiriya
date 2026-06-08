@@ -48,6 +48,7 @@ import MapDirectionLink from './components/MapDirectionLink';
 import AiCopilot from './components/AiCopilot';
 import KeyDiagnosticsModal from './components/KeyDiagnosticsModal';
 import AlFakhriLogo from './components/AlFakhriLogo';
+import predefinedFirebaseConfig from '../firebase-applet-config.json';
 
 // Memory fallback for localStorage variables to prevent SecurityError crashes inside iframe environments
 const memoryStorage: Record<string, string> = {};
@@ -82,7 +83,12 @@ const safeLocalStorage = {
 export default function App() {
   // Config state
   const [firebaseConfig, setFirebaseConfig] = useState<CustomFirebaseConfig | null>(() => {
-    // Priority 1: Check if environment variables are configured via secrets
+    // Priority 1: Auto-provisioned AI Studio config
+    if (predefinedFirebaseConfig && predefinedFirebaseConfig.projectId) {
+      return predefinedFirebaseConfig as CustomFirebaseConfig;
+    }
+
+    // Priority 2: Check if environment variables are configured via secrets
     const environmentConfig: CustomFirebaseConfig = {
       apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
       authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
@@ -96,7 +102,7 @@ export default function App() {
       return environmentConfig;
     }
 
-    // Priority 2: Check standard localStorage fallback
+    // Priority 3: Check standard localStorage fallback
     const saved = safeLocalStorage.getItem('fleet_firebase_config');
     if (saved) {
       try {

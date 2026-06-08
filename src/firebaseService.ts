@@ -152,7 +152,11 @@ export function getFirebaseDb(config: CustomFirebaseConfig | null): Firestore | 
       firebaseApp = getApp();
     }
     if (firebaseApp) {
-      firestoreDb = getFirestore(firebaseApp);
+      if (config && config.firestoreDatabaseId) {
+        firestoreDb = getFirestore(firebaseApp, config.firestoreDatabaseId);
+      } else {
+        firestoreDb = getFirestore(firebaseApp);
+      }
     }
     return firestoreDb;
   } catch (error) {
