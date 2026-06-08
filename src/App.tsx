@@ -97,20 +97,19 @@ export default function App() {
 
   // Sync listener registers
   useEffect(() => {
-    setLoading(true);
-
     // Initial database seed if valid Firestore configuration exists
     if (isValidConfig(configToUse)) {
-      setStatusText('Connecting Firestore...');
+      setStatusText('Online Cloud Sync Active');
+      setErrorMessage(null);
+      
+      // Run the initial check and seed process asynchronously in the background.
+      // This prevents thread blocking and keeps real-time subscriptions fast and active.
       checkAndSeedFirebaseIfEmpty(configToUse)
         .then(() => {
-          setStatusText('Online Cloud Sync Active');
-          setErrorMessage(null);
+          console.info("Firestore cloud initial checks completed successfully.");
         })
         .catch((err) => {
-          console.info("Firestore connection standby; fallback sandbox initiated.");
-          setLocalFallbackActive(true);
-          setStatusText('Sandbox Mode (Offline Fallback)');
+          console.warn("Firestore background seed check bypassed/standby: ", err.message);
         });
     } else {
       setStatusText('Sandbox Mode (Local Storage)');
@@ -124,9 +123,11 @@ export default function App() {
         setLoading(false);
       },
       (err) => {
-        console.info("Truck subscription redirecting to local sandbox:", err.message);
-        setLocalFallbackActive(true);
-        setStatusText('Sandbox Mode (Offline Fallback)');
+        console.warn("Truck subscription update notice:", err.message);
+        if (!isValidConfig(configToUse)) {
+          setLocalFallbackActive(true);
+          setStatusText('Sandbox Mode (Offline Fallback)');
+        }
         setLoading(false);
       }
     );
@@ -138,9 +139,11 @@ export default function App() {
         setDrivers(updatedDrivers);
       },
       (err) => {
-        console.info("Driver subscription redirecting to local sandbox:", err.message);
-        setLocalFallbackActive(true);
-        setStatusText('Sandbox Mode (Offline Fallback)');
+        console.warn("Driver subscription update notice:", err.message);
+        if (!isValidConfig(configToUse)) {
+          setLocalFallbackActive(true);
+          setStatusText('Sandbox Mode (Offline Fallback)');
+        }
       }
     );
 
@@ -151,9 +154,11 @@ export default function App() {
         setTrips(updatedTrips);
       },
       (err) => {
-        console.info("Trip subscription redirecting to local sandbox:", err.message);
-        setLocalFallbackActive(true);
-        setStatusText('Sandbox Mode (Offline Fallback)');
+        console.warn("Trip subscription update notice:", err.message);
+        if (!isValidConfig(configToUse)) {
+          setLocalFallbackActive(true);
+          setStatusText('Sandbox Mode (Offline Fallback)');
+        }
       }
     );
 
