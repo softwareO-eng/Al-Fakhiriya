@@ -507,7 +507,9 @@ export async function assignTrip(
       status: 'active'
     });
 
-    await withTimeout(batch.commit(), 10000, 'Confirming Trip Dispatch');
+    withTimeout(batch.commit(), 10000, 'Confirming Trip Dispatch').catch(error => 
+      handleFirestoreError(error, OperationType.WRITE, 'trips_assignment')
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'trips_assignment');
   }
@@ -556,7 +558,9 @@ export async function completeTrip(
       completedTime
     });
 
-    await withTimeout(batch.commit(), 10000, 'Completing Trip Route');
+    withTimeout(batch.commit(), 10000, 'Completing Trip Route').catch(error => 
+      handleFirestoreError(error, OperationType.WRITE, `complete_trip_${trip.id}`)
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `complete_trip_${trip.id}`);
   }
@@ -575,7 +579,9 @@ export async function addNewTruck(config: CustomFirebaseConfig | null, truck: Tr
     return;
   }
   try {
-    await withTimeout(setDoc(doc(db, 'trucks', truck.id), truck), 10000, `Adding Truck ${truck.id}`);
+    withTimeout(setDoc(doc(db, 'trucks', truck.id), truck), 10000, `Adding Truck ${truck.id}`).catch(error => 
+      handleFirestoreError(error, OperationType.WRITE, `trucks/${truck.id}`)
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `trucks/${truck.id}`);
   }
@@ -593,7 +599,9 @@ export async function addNewDriver(config: CustomFirebaseConfig | null, driver: 
     return;
   }
   try {
-    await withTimeout(setDoc(doc(db, 'drivers', driver.id), driver), 10000, `Adding Driver ${driver.id}`);
+    withTimeout(setDoc(doc(db, 'drivers', driver.id), driver), 10000, `Adding Driver ${driver.id}`).catch(error => 
+      handleFirestoreError(error, OperationType.WRITE, `drivers/${driver.id}`)
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `drivers/${driver.id}`);
   }
@@ -609,7 +617,9 @@ export async function deleteTruck(config: CustomFirebaseConfig | null, truckId: 
     return;
   }
   try {
-    await withTimeout(deleteDoc(doc(db, 'trucks', truckId)), 10000, `Deleting Truck ${truckId}`);
+    withTimeout(deleteDoc(doc(db, 'trucks', truckId)), 10000, `Deleting Truck ${truckId}`).catch(error => 
+      handleFirestoreError(error, OperationType.DELETE, `trucks/${truckId}`)
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `trucks/${truckId}`);
   }
@@ -625,7 +635,9 @@ export async function deleteDriver(config: CustomFirebaseConfig | null, driverId
     return;
   }
   try {
-    await withTimeout(deleteDoc(doc(db, 'drivers', driverId)), 10000, `Deleting Driver ${driverId}`);
+    withTimeout(deleteDoc(doc(db, 'drivers', driverId)), 10000, `Deleting Driver ${driverId}`).catch(error => 
+      handleFirestoreError(error, OperationType.DELETE, `drivers/${driverId}`)
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `drivers/${driverId}`);
   }
@@ -656,7 +668,9 @@ export async function deleteTrip(config: CustomFirebaseConfig | null, trip: Trip
     }
     const tripRef = doc(db, 'trips', trip.id);
     batch.delete(tripRef);
-    await withTimeout(batch.commit(), 10000, `Deleting Trip ${trip.id}`);
+    withTimeout(batch.commit(), 10000, `Deleting Trip ${trip.id}`).catch(error => 
+      handleFirestoreError(error, OperationType.DELETE, `trips/${trip.id}`)
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `trips/${trip.id}`);
   }
