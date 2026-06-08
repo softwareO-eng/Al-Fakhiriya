@@ -211,16 +211,6 @@ export default function AddAssetModal({
                   />
                 </div>
                 <div>
-                  <input
-                    id="truck-year-input"
-                    type="text"
-                    value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                    placeholder="e.g. 2024"
-                    className="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0e5697] text-slate-800 font-mono"
-                  />
-                </div>
-                <div>
                   <label className="block text-[10px] font-mono font-medium text-slate-500 uppercase tracking-wider mb-1">
                     License Plate Code
                   </label>
@@ -245,19 +235,6 @@ export default function AddAssetModal({
                     placeholder="e.g. 48,000 lbs"
                     className="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0e5697] text-slate-800 font-mono"
                   />
-                </div>
-                <div>
-                  <select
-                    id="truck-fuel-select"
-                    value={fuelType}
-                    onChange={(e) => setFuelType(e.target.value)}
-                    className="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0e5697] text-slate-800"
-                  >
-                    <option value="Diesel">Diesel</option>
-                    <option value="CNG">CNG (Natural Gas)</option>
-                    <option value="Electric">Electric Powered</option>
-                    <option value="Hybrid">Hybrid Electric</option>
-                  </select>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-[10px] font-mono font-medium text-slate-500 uppercase tracking-wider mb-1">
