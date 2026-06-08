@@ -44,14 +44,14 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   const errMsg = error instanceof Error ? error.message : String(error);
   // Log message as a quiet system notice rather than an automated checker-triggering error logs report.
   console.info(`[System Sync Status] Sync is offline or on standby for path: ${path}. Operating in secure sandbox mode. Reason: ${errMsg}`);
-  throw new Error(`Integrated Cloud sync inactive. Offline sandbox mode enabled.`);
+  throw new Error(errMsg);
 }
 
 // Helper to race an online Firestore promise against a fast client-side timeout
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 2500, operationName: string = "Operation"): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 10000, operationName: string = "Operation"): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new Error(`${operationName} has switched to Sandbox state.`));
+      reject(new Error(`${operationName} has timed out after ${timeoutMs}ms.`));
     }, timeoutMs);
 
     promise
@@ -278,20 +278,20 @@ export async function checkAndSeedFirebaseIfEmpty(config: CustomFirebaseConfig |
 
   try {
     // Check trucks
-    const trucksSnap = await withTimeout(getDocs(collection(db, 'trucks')), 2500, 'Checking initial trucks');
+    const trucksSnap = await withTimeout(getDocs(collection(db, 'trucks')), 10000, 'Checking initial trucks');
     if (trucksSnap.empty) {
       console.log('Seeding initial trucks to Firestore...');
       for (const t of SEED_TRUCKS) {
-        await withTimeout(setDoc(doc(db, 'trucks', t.id), t), 2500, `Seeding Truck ${t.id}`);
+        await withTimeout(setDoc(doc(db, 'trucks', t.id), t), 10000, `Seeding Truck ${t.id}`);
       }
     }
 
     // Check drivers
-    const driversSnap = await withTimeout(getDocs(collection(db, 'drivers')), 2500, 'Checking initial drivers');
+    const driversSnap = await withTimeout(getDocs(collection(db, 'drivers')), 10000, 'Checking initial drivers');
     if (driversSnap.empty) {
       console.log('Seeding initial drivers to Firestore...');
       for (const d of SEED_DRIVERS) {
-        await withTimeout(setDoc(doc(db, 'drivers', d.id), d), 2500, `Seeding Driver ${d.id}`);
+        await withTimeout(setDoc(doc(db, 'drivers', d.id), d), 10000, `Seeding Driver ${d.id}`);
       }
     }
   } catch (error) {
@@ -507,7 +507,7 @@ export async function assignTrip(
       status: 'active'
     });
 
-    await withTimeout(batch.commit(), 2500, 'Confirming Trip Dispatch');
+    await withTimeout(batch.commit(), 10000, 'Confirming Trip Dispatch');
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'trips_assignment');
   }
@@ -556,7 +556,7 @@ export async function completeTrip(
       completedTime
     });
 
-    await withTimeout(batch.commit(), 2500, 'Completing Trip Route');
+    await withTimeout(batch.commit(), 10000, 'Completing Trip Route');
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `complete_trip_${trip.id}`);
   }
@@ -575,7 +575,7 @@ export async function addNewTruck(config: CustomFirebaseConfig | null, truck: Tr
     return;
   }
   try {
-    await withTimeout(setDoc(doc(db, 'trucks', truck.id), truck), 2500, `Adding Truck ${truck.id}`);
+    await withTimeout(setDoc(doc(db, 'trucks', truck.id), truck), 10000, `Adding Truck ${truck.id}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `trucks/${truck.id}`);
   }
@@ -593,7 +593,7 @@ export async function addNewDriver(config: CustomFirebaseConfig | null, driver: 
     return;
   }
   try {
-    await withTimeout(setDoc(doc(db, 'drivers', driver.id), driver), 2500, `Adding Driver ${driver.id}`);
+    await withTimeout(setDoc(doc(db, 'drivers', driver.id), driver), 10000, `Adding Driver ${driver.id}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `drivers/${driver.id}`);
   }
@@ -609,7 +609,7 @@ export async function deleteTruck(config: CustomFirebaseConfig | null, truckId: 
     return;
   }
   try {
-    await withTimeout(deleteDoc(doc(db, 'trucks', truckId)), 2500, `Deleting Truck ${truckId}`);
+    await withTimeout(deleteDoc(doc(db, 'trucks', truckId)), 10000, `Deleting Truck ${truckId}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `trucks/${truckId}`);
   }
@@ -625,7 +625,7 @@ export async function deleteDriver(config: CustomFirebaseConfig | null, driverId
     return;
   }
   try {
-    await withTimeout(deleteDoc(doc(db, 'drivers', driverId)), 2500, `Deleting Driver ${driverId}`);
+    await withTimeout(deleteDoc(doc(db, 'drivers', driverId)), 10000, `Deleting Driver ${driverId}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `drivers/${driverId}`);
   }
@@ -656,7 +656,7 @@ export async function deleteTrip(config: CustomFirebaseConfig | null, trip: Trip
     }
     const tripRef = doc(db, 'trips', trip.id);
     batch.delete(tripRef);
-    await withTimeout(batch.commit(), 2500, `Deleting Trip ${trip.id}`);
+    await withTimeout(batch.commit(), 10000, `Deleting Trip ${trip.id}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `trips/${trip.id}`);
   }
