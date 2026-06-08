@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "truck": {
+      "title": "Truck",
+      "description": "A company shipping truck with current status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Truck unique identifier, e.g. TRK-101" },
+        "name": { "type": "string", "description": "Truck display name or model" },
+        "status": { "type": "string", "enum": ["Available", "On the way"] }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "driver": {
+      "title": "Driver",
+      "description": "Licensed truck driver employed by the company",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Driver unique identifier" },
+        "name": { "type": "string", "description": "Driver full name" },
+        "licenseNumber": { "type": "string", "description": "Driver license number" },
+        "phoneNumber": { "type": "string", "description": "Driver phone number" },
+        "status": { "type": "string", "enum": ["Available", "On the way"] }
+      },
+      "required": ["id", "name", "licenseNumber", "phoneNumber", "status"]
+    },
+    "trip": {
+      "title": "Trip",
+      "description": "An active or completed shipping assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Auto-generated trip ID" },
+        "driverId": { "type": "string", "description": "ID of the assigned driver" },
+        "driverName": { "type": "string", "description": "Name of the assigned driver" },
+        "truckId": { "type": "string", "description": "ID of the assigned truck" },
+        "truckName": { "type": "string", "description": "Name of the assigned truck" },
+        "from": { "type": "string", "description": "Pickup location" },
+        "to": { "type": "string", "description": "Dropoff location" },
+        "startTime": { "type": "string", "format": "date-time", "description": "Trip departure timestamp" },
+        "endTime": { "type": "string", "format": "date-time", "description": "Trip completion timestamp (optional)" },
+        "status": { "type": "string", "enum": ["active", "completed"] }
+      },
+      "required": ["id", "driverId", "driverName", "truckId", "truckName", "from", "to", "startTime", "status"]
+    }
+  },
+  "firestore": {
+    "trucks": {
+      "schema": "truck",
+      "description": "List of all trucks and their current availability statuses"
+    },
+    "drivers": {
+      "schema": "driver",
+      "description": "List of all drivers with licensing and phone information"
+    },
+    "trips": {
+      "schema": "trip",
+      "description": "Active and completed trips assigned to drivers and trucks"
+    }
+  }
+}
