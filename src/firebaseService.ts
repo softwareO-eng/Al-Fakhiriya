@@ -15,6 +15,7 @@ import {
   writeBatch,
   query,
   orderBy,
+  deleteDoc,
   Firestore
 } from 'firebase/firestore';
 import { Truck, Driver, Trip, CustomFirebaseConfig } from './types';
@@ -549,5 +550,68 @@ export async function addNewDriver(config: CustomFirebaseConfig | null, driver: 
     await withTimeout(setDoc(doc(db, 'drivers', driver.id), driver), 2500, `Adding Driver ${driver.id}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `drivers/${driver.id}`);
+  }
+}
+
+export async function deleteTruck(config: CustomFirebaseConfig | null, truckId: string): Promise<void> {
+  const db = getFirebaseDb(config);
+  if (!db) {
+    const { trucks, drivers, trips } = getLocalStorageData();
+    const updatedTrucks = trucks.filter(t => t.id !== truckId);
+    setLocalStorageData(updatedTrucks, drivers, trips);
+    notifyLocalListeners();
+    return;
+  }
+  try {
+    await withTimeout(deleteDoc(doc(db, 'trucks', truckId)), 2500, `Deleting Truck ${truckId}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `trucks/${truckId}`);
+  }
+}
+
+export async function deleteDriver(config: CustomFirebaseConfig | null, driverId: string): Promise<void> {
+  const db = getFirebaseDb(config);
+  if (!db) {
+    const { trucks, drivers, trips } = getLocalStorageData();
+    const updatedDrivers = drivers.filter(d => d.id !== driverId);
+    setLocalStorageData(trucks, updatedDrivers, trips);
+    notifyLocalListeners();
+    return;
+  }
+  try {
+    await withTimeout(deleteDoc(doc(db, 'drivers', driverId)), 2500, `Deleting Driver ${driverId}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `drivers/${driverId}`);
+  }
+}
+
+export async function deleteTrip(config: CustomFirebaseConfig | null, trip: Trip): Promise<void> {
+  const db = getFirebaseDb(config);
+  if (!db) {
+    const { trucks, drivers, trips } = getLocalStorageData();
+    if (trip.status === 'active') {
+      const truckIdx = trucks.findIndex(t => t.id === trip.truckId);
+      if (truckIdx !== -1) trucks[truckIdx].status = 'Available';
+      const driverIdx = drivers.findIndex(d => d.id === trip.driverId);
+      if (driverIdx !== -1) drivers[driverIdx].status = 'Available';
+    }
+    const updatedTrips = trips.filter(t => t.id !== trip.id);
+    setLocalStorageData(trucks, drivers, updatedTrips);
+    notifyLocalListeners();
+    return;
+  }
+  try {
+    const batch = writeBatch(db);
+    if (trip.status === 'active') {
+      const truckRef = doc(db, 'trucks', trip.truckId);
+      batch.update(truckRef, { status: 'Available' });
+      const driverRef = doc(db, 'drivers', trip.driverId);
+      batch.update(driverRef, { status: 'Available' });
+    }
+    const tripRef = doc(db, 'trips', trip.id);
+    batch.delete(tripRef);
+    await withTimeout(batch.commit(), 2500, `Deleting Trip ${trip.id}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `trips/${trip.id}`);
   }
 }

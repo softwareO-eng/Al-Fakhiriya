@@ -21,7 +21,8 @@ import {
   Flame,
   XCircle,
   HelpCircle,
-  SendHorizontal
+  SendHorizontal,
+  Trash2
 } from 'lucide-react';
 
 import { Truck, Driver, Trip, CustomFirebaseConfig } from './types';
@@ -34,7 +35,10 @@ import {
   checkAndSeedFirebaseIfEmpty,
   addNewTruck,
   addNewDriver,
-  isValidConfig
+  isValidConfig,
+  deleteTruck,
+  deleteDriver,
+  deleteTrip
 } from './firebaseService';
 
 import FirebaseConfigModal from './components/FirebaseConfigModal';
@@ -231,6 +235,49 @@ export default function App() {
       throw new Error(`A pilot with ID "${driverOn.id}" is already registered in the dispatch board.`);
     }
     await addNewDriver(configToUse, driverOn);
+  };
+
+  const handleDeleteTruck = async (truckId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to remove Rig ${truckId} from the fleet registry?`)) {
+      return;
+    }
+    try {
+      if (selectedTruck?.id === truckId) {
+        setSelectedTruck(null);
+      }
+      await deleteTruck(configToUse, truckId);
+    } catch (err) {
+      alert(`Could not delete truck: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleDeleteDriver = async (driverId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to remove Pilot ${driverId} from the dispatch roster?`)) {
+      return;
+    }
+    try {
+      if (selectedDriver?.id === driverId) {
+        setSelectedDriver(null);
+      }
+      await deleteDriver(configToUse, driverId);
+    } catch (err) {
+      alert(`Could not delete driver: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleDeleteTrip = async (trip: Trip, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const actionLabel = trip.status === 'active' ? 'cancel & abort this active' : 'delete historical';
+    if (!window.confirm(`Are you sure you want to ${actionLabel} dispatch record ${trip.id}?`)) {
+      return;
+    }
+    try {
+      await deleteTrip(configToUse, trip);
+    } catch (err) {
+      alert(`Could not delete trip: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   // Filter lists
@@ -486,9 +533,19 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                           </div>
                         </div>
                         <div className="flex flex-col items-end justify-between self-stretch shrink-0 pb-1">
-                          <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
-                            Available
-                          </span>
+                          <div className="flex items-center space-x-2">
+                            <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
+                              Available
+                            </span>
+                            <button
+                              type="button"
+                              title="Delete Truck"
+                              onClick={(e) => handleDeleteTruck(truck.id, e)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           {isSelected && (
                             <span className="text-[10px] font-bold text-[#0e5697] animate-pulse mt-4">✓ Chosen</span>
                           )}
@@ -539,9 +596,19 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                           <span className="block text-[11px] text-slate-400 font-mono truncate">{driver.phoneNumber}</span>
                         </div>
                         <div className="flex flex-col items-end space-y-2">
-                          <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
-                            Available
-                          </span>
+                          <div className="flex items-center space-x-2">
+                            <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
+                              Available
+                            </span>
+                            <button
+                              type="button"
+                              title="Delete Driver"
+                              onClick={(e) => handleDeleteDriver(driver.id, e)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           {isSelected && (
                             <span className="text-[10px] font-bold text-indigo-700 animate-pulse">✓ Chosen</span>
                           )}
@@ -644,7 +711,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                       </div>
 
                       {/* Right: Actions */}
-                      <div className="flex md:flex-col items-stretch md:items-end justify-between md:justify-center border-t md:border-t-0 border-slate-100 pt-3.5 md:pt-0 shrink-0">
+                      <div className="flex items-center gap-2 border-t md:border-t-0 border-slate-100 pt-3.5 md:pt-0 shrink-0">
                         <button
                           id={`complete-trip-button-${trip.id}`}
                           onClick={() => handleCompleteTrip(trip)}
@@ -652,6 +719,14 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                         >
                           <CheckCircle className="h-3.5 w-3.5" />
                           <span>Arrived / Complete Route</span>
+                        </button>
+                        <button
+                          id={`delete-trip-button-${trip.id}`}
+                          title="Cancel & Abort Dispatch"
+                          onClick={(e) => handleDeleteTrip(trip, e)}
+                          className="p-2.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-100 rounded-xl transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
 
@@ -704,8 +779,19 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                         </div>
                       </div>
 
-                      <div className="text-[10px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-1 rounded">
-                        ✓ Complete
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <div className="text-[10px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-1 rounded">
+                          ✓ Complete
+                        </div>
+                        <button
+                          type="button"
+                          id={`delete-log-button-${log.id}`}
+                          title="Delete Historical Log"
+                          onClick={(e) => handleDeleteTrip(log, e)}
+                          className="p-1 px-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   ))}
