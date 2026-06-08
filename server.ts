@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
@@ -119,14 +120,19 @@ Your goals are:
   });
 
   // Vite middleware for development / Static Server for production
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(distPath) && fs.existsSync(path.join(distPath, 'index.html'));
+
+  if (process.env.NODE_ENV !== "production" || !hasDist) {
+    if (process.env.NODE_ENV === "production" && !hasDist) {
+      console.warn("Production mode was requested, but 'dist' assets are missing. Sourcing live Vite server compiler to prevent a white blank screen...");
+    }
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

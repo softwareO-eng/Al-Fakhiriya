@@ -166,42 +166,84 @@ const LS_TRUCKS_KEY = 'fleet_sandbox_trucks';
 const LS_DRIVERS_KEY = 'fleet_sandbox_drivers';
 const LS_TRIPS_KEY = 'fleet_sandbox_trips';
 
+// Secure memory-fallback in case standard localStorage is blocked under iframe sandboxes
+const memoryStorage: Record<string, string> = {};
+
+const safeLocalStorage = {
+  getItem(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("[AlFakhri Dispatch] Local storage read restricted by browser sandbox. Using memory cache fallback.", e);
+      return memoryStorage[key] || null;
+    }
+  },
+  setItem(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("[AlFakhri Dispatch] Local storage write restricted by browser sandbox. Writing to memory cache.", e);
+      memoryStorage[key] = value;
+    }
+  },
+  removeItem(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn("[AlFakhri Dispatch] Local storage delete restricted.", e);
+      delete memoryStorage[key];
+    }
+  }
+};
+
 function getLocalStorageData(): { trucks: Truck[]; drivers: Driver[]; trips: Trip[] } {
-  let trucksRaw = localStorage.getItem(LS_TRUCKS_KEY);
-  let driversRaw = localStorage.getItem(LS_DRIVERS_KEY);
-  let tripsRaw = localStorage.getItem(LS_TRIPS_KEY);
+  let trucksRaw = safeLocalStorage.getItem(LS_TRUCKS_KEY);
+  let driversRaw = safeLocalStorage.getItem(LS_DRIVERS_KEY);
+  let tripsRaw = safeLocalStorage.getItem(LS_TRIPS_KEY);
 
   let trucks: Truck[] = [];
   let drivers: Driver[] = [];
   let trips: Trip[] = [];
 
   if (trucksRaw) {
-    trucks = JSON.parse(trucksRaw);
+    try {
+      trucks = JSON.parse(trucksRaw);
+    } catch (e) {
+      trucks = [...SEED_TRUCKS];
+    }
   } else {
     trucks = [...SEED_TRUCKS];
-    localStorage.setItem(LS_TRUCKS_KEY, JSON.stringify(trucks));
+    safeLocalStorage.setItem(LS_TRUCKS_KEY, JSON.stringify(trucks));
   }
 
   if (driversRaw) {
-    drivers = JSON.parse(driversRaw);
+    try {
+      drivers = JSON.parse(driversRaw);
+    } catch (e) {
+      drivers = [...SEED_DRIVERS];
+    }
   } else {
     drivers = [...SEED_DRIVERS];
-    localStorage.setItem(LS_DRIVERS_KEY, JSON.stringify(drivers));
+    safeLocalStorage.setItem(LS_DRIVERS_KEY, JSON.stringify(drivers));
   }
 
   if (tripsRaw) {
-    trips = JSON.parse(tripsRaw);
+    try {
+      trips = JSON.parse(tripsRaw);
+    } catch (e) {
+      trips = [];
+    }
   } else {
-    localStorage.setItem(LS_TRIPS_KEY, JSON.stringify([]));
+    safeLocalStorage.setItem(LS_TRIPS_KEY, JSON.stringify([]));
   }
 
   return { trucks, drivers, trips };
 }
 
 function setLocalStorageData(trucks: Truck[], drivers: Driver[], trips: Trip[]) {
-  localStorage.setItem(LS_TRUCKS_KEY, JSON.stringify(trucks));
-  localStorage.setItem(LS_DRIVERS_KEY, JSON.stringify(drivers));
-  localStorage.setItem(LS_TRIPS_KEY, JSON.stringify(trips));
+  safeLocalStorage.setItem(LS_TRUCKS_KEY, JSON.stringify(trucks));
+  safeLocalStorage.setItem(LS_DRIVERS_KEY, JSON.stringify(drivers));
+  safeLocalStorage.setItem(LS_TRIPS_KEY, JSON.stringify(trips));
 }
 
 // Create custom callbacks to simulate Firestore listener in Local Sandbox mode

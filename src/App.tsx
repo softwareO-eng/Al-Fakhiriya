@@ -49,6 +49,36 @@ import AiCopilot from './components/AiCopilot';
 import KeyDiagnosticsModal from './components/KeyDiagnosticsModal';
 import AlFakhriLogo from './components/AlFakhriLogo';
 
+// Memory fallback for localStorage variables to prevent SecurityError crashes inside iframe environments
+const memoryStorage: Record<string, string> = {};
+
+const safeLocalStorage = {
+  getItem(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("[AlFakhri App] Local storage config read blocked by sandbox. Using memory fallback.", e);
+      return memoryStorage[key] || null;
+    }
+  },
+  setItem(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("[AlFakhri App] Local storage config write blocked by sandbox. Writing to memory.", e);
+      memoryStorage[key] = value;
+    }
+  },
+  removeItem(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn("[AlFakhri App] Local storage delete blocked.", e);
+      delete memoryStorage[key];
+    }
+  }
+};
+
 export default function App() {
   // Config state
   const [firebaseConfig, setFirebaseConfig] = useState<CustomFirebaseConfig | null>(() => {
@@ -67,7 +97,7 @@ export default function App() {
     }
 
     // Priority 2: Check standard localStorage fallback
-    const saved = localStorage.getItem('fleet_firebase_config');
+    const saved = safeLocalStorage.getItem('fleet_firebase_config');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -183,9 +213,9 @@ export default function App() {
   // Config saver
   const handleSaveConfig = (newConfig: CustomFirebaseConfig | null) => {
     if (newConfig) {
-      localStorage.setItem('fleet_firebase_config', JSON.stringify(newConfig));
+      safeLocalStorage.setItem('fleet_firebase_config', JSON.stringify(newConfig));
     } else {
-      localStorage.removeItem('fleet_firebase_config');
+      safeLocalStorage.removeItem('fleet_firebase_config');
     }
     setFirebaseConfig(newConfig);
     setLocalFallbackActive(false); // Reset fallback flag to try again with the new configuration!
