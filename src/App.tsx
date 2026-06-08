@@ -45,7 +45,6 @@ import FirebaseConfigModal from './components/FirebaseConfigModal';
 import TripAssignmentModal from './components/TripAssignmentModal';
 import AddAssetModal from './components/AddAssetModal';
 import MapDirectionLink from './components/MapDirectionLink';
-import AiCopilot from './components/AiCopilot';
 import KeyDiagnosticsModal from './components/KeyDiagnosticsModal';
 import AlFakhriLogo from './components/AlFakhriLogo';
 import predefinedFirebaseConfig from '../firebase-applet-config.json';
@@ -885,13 +884,6 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
         onClose={() => setIsAddAssetOpen(false)}
         onAddTruck={handleAddTruck}
         onAddDriver={handleAddDriver}
-      />
-
-      {/* AI Assistant Co-Pilot Overlay */}
-      <AiCopilot 
-        availableTrucks={trucks} 
-        availableDrivers={drivers} 
-        activeTrips={trips} 
       />
 
       {/* Diagnostics Modal */}
