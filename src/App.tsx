@@ -454,7 +454,48 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
       {/* Main Content Space */}
       <main id="dispatch-dashboard" className="max-w-7xl mx-auto px-4 py-8 space-y-6">
 
+        {/* Global Summary Stats Cards */}
+        <div id="dispatch-global-stats" className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] flex items-center space-x-4">
+            <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+              <TruckIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Trucks</p>
+              <h3 className="text-2xl font-bold text-slate-800 tracking-tight">{trucks.length}</h3>
+            </div>
+          </div>
 
+          <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] flex items-center space-x-4">
+            <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <DriverIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Drivers</p>
+              <h3 className="text-2xl font-bold text-slate-800 tracking-tight">{availableDrivers.length}</h3>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] flex items-center space-x-4">
+            <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-sky-50 text-sky-600">
+              <TruckIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Trucks</p>
+              <h3 className="text-2xl font-bold text-slate-800 tracking-tight">{availableTrucks.length}</h3>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] flex items-center space-x-4">
+            <div className="h-10 w-10 flex items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+              <Navigation className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">On The Way</p>
+              <h3 className="text-2xl font-bold text-slate-800 tracking-tight">{onTheWayTrucks.length}</h3>
+            </div>
+          </div>
+        </div>
 
         {/* Selection HUD Panel */}
         {(selectedTruck || selectedDriver) && (
@@ -510,17 +551,17 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
         )}
 
         {/* Dashboard Content Grid */}
-        <div id="operations-layout-grid" className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div id="operations-layout-grid" className="space-y-8">
           
           {/* ================= COLUMN 1: AVAILABLE RESOURCES (trucks + drivers) ================= */}
-          <div id="available-vehicles-drivers-column" className="lg:col-span-5 space-y-8">
+          <div id="available-vehicles-drivers-column" className="space-y-8">
             
             {/* AVAILABLE TRUCKS SECTION */}
             <div id="available-trucks-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center space-x-2">
                   <TruckIcon className="text-slate-700 h-4.5 w-4.5" />
-                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Available Fleet Rigs</h2>
+                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Available trucks</h2>
                 </div>
                 <span className="bg-slate-100 text-slate-800 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full">
                   {availableTrucks.length}
@@ -533,7 +574,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                   <p className="text-[10px] mt-0.5">Wait for active runs to clear or add more rigs above.</p>
                 </div>
               ) : (
-                <div id="available-trucks-grid" className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                <div id="available-trucks-grid" className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 xl:grid-cols-12 2xl:grid-cols-16 gap-1 pr-1">
                   {availableTrucks.map((truck) => {
                     const isSelected = selectedTruck?.id === truck.id;
                     return (
@@ -541,57 +582,31 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                         key={truck.id}
                         id={`truck-card-${truck.id}`}
                         onClick={() => setSelectedTruck(isSelected ? null : truck)}
-                        className={`p-3.5 rounded-xl border cursor-pointer select-none transition-all flex items-center justify-between ${
+                        className={`p-1 rounded md:rounded-md border cursor-pointer select-none transition-all ${
                           isSelected
-                            ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20'
-                            : 'bg-slate-50/50 border-slate-200/60 hover:bg-slate-50'
+                            ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
+                            : 'bg-white border-slate-200 hover:bg-slate-50'
                         }`}
                       >
-                        <div className="space-y-1.5 truncate flex-1 pr-4">
-                          <div className="flex items-center space-x-1.5">
-                            <span className="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono font-black uppercase">RIG</span>
-                            <span className="font-mono font-bold text-slate-400 text-xs">{truck.id}</span>
+                        <div className="flex items-start justify-between min-w-0">
+                          <div className="flex-1 min-w-0 pr-0.5">
+                            <div className="font-mono font-bold text-slate-900 text-[9px] truncate leading-tight">{truck.id}</div>
+                            <div className="font-mono text-[8px] text-slate-500 truncate leading-tight">Plt: {truck.licensePlate || 'N/A'}</div>
                           </div>
-                          <div>
-                            <span className="block font-semibold text-slate-950 text-sm truncate">{truck.name}</span>
-                            {truck.model && (
-                              <span className="block text-[11px] text-[#0e5697] font-semibold truncate mt-0.5">{truck.model} {truck.year ? `(${truck.year})` : ''}</span>
+                          <div className="flex flex-col items-end gap-0.5 shrink-0">
+                            {isSelected ? (
+                              <CheckCircle className="w-3 h-3 text-indigo-600" />
+                            ) : (
+                              <button
+                                type="button"
+                                title="Delete Truck"
+                                onClick={(e) => handleDeleteTruck(truck.id, e)}
+                                className="text-slate-300 hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             )}
                           </div>
-                          
-                          {/* Specifications Grid */}
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] text-slate-500 border-t border-slate-100/80 pt-1.5">
-                            <div className="truncate">
-                              <span className="text-slate-400">Plate:</span> <strong className="font-mono text-slate-700">{truck.licensePlate || 'N/A'}</strong>
-                            </div>
-                            <div className="truncate">
-                              <span className="text-slate-400">Cap:</span> <strong className="text-slate-700">{truck.capacity || '45k lbs'}</strong>
-                            </div>
-                            <div className="truncate">
-                              <span className="text-slate-400">Fuel:</span> <strong className="text-slate-700">{truck.fuelType || 'Diesel'}</strong>
-                            </div>
-                            <div className="truncate">
-                              <span className="text-slate-400">Mileage:</span> <strong className="font-mono text-slate-700">{truck.currentMileage || 'N/A'}</strong>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end justify-between self-stretch shrink-0 pb-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
-                              Available
-                            </span>
-                            <button
-                              type="button"
-                              title="Delete Truck"
-                              onClick={(e) => handleDeleteTruck(truck.id, e)}
-                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                          {isSelected && (
-                            <span className="text-[10px] font-bold text-[#0e5697] animate-pulse mt-4">✓ Chosen</span>
-                          )}
                         </div>
                       </div>
                     );
@@ -605,7 +620,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center space-x-2">
                   <DriverIcon className="text-slate-700 h-4.5 w-4.5" />
-                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Available Pilots / Drivers</h2>
+                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Available drivers</h2>
                 </div>
                 <span className="bg-slate-100 text-slate-800 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full">
                   {availableDrivers.length}
@@ -618,7 +633,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                   <p className="text-[10px] mt-0.5">Wait for active arrivals or hire custom pilots above.</p>
                 </div>
               ) : (
-                <div id="available-drivers-grid" className="grid grid-cols-1 gap-2.5 max-h-80 overflow-y-auto pr-1">
+                <div id="available-drivers-grid" className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 xl:grid-cols-12 2xl:grid-cols-16 gap-1 pr-1">
                   {availableDrivers.map((driver) => {
                     const isSelected = selectedDriver?.id === driver.id;
                     return (
@@ -626,35 +641,32 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                         key={driver.id}
                         id={`driver-card-${driver.id}`}
                         onClick={() => setSelectedDriver(isSelected ? null : driver)}
-                        className={`p-3.5 rounded-xl border cursor-pointer select-none transition-all flex items-center justify-between ${
+                        className={`p-1 rounded md:rounded-md border cursor-pointer select-none transition-all ${
                           isSelected
-                            ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-500/20'
-                            : 'bg-slate-50/50 border-slate-200/60 hover:bg-slate-50'
+                            ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
+                            : 'bg-white border-slate-200 hover:bg-slate-50'
                         }`}
                       >
-                        <div className="space-y-0.5 truncate">
-                          <span className="block text-xs font-mono font-bold text-slate-400">PILOT</span>
-                          <span className="block font-semibold text-slate-950 text-sm truncate">{driver.name}</span>
-                          <span className="block text-[11px] text-slate-600 font-mono">CDL: {driver.licenseNumber}</span>
-                          <span className="block text-[11px] text-slate-400 font-mono truncate">{driver.phoneNumber}</span>
-                        </div>
-                        <div className="flex flex-col items-end space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
-                              Available
-                            </span>
-                            <button
-                              type="button"
-                              title="Delete Driver"
-                              onClick={(e) => handleDeleteDriver(driver.id, e)}
-                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                        <div className="flex items-start justify-between min-w-0">
+                           <div className="flex-1 min-w-0 pr-0.5">
+                            <div className="font-bold text-slate-900 text-[9px] truncate leading-tight">{driver.name}</div>
+                            <div className="font-mono text-[8px] text-slate-500 truncate leading-tight">{driver.id}</div>
+                            <div className="font-mono text-[8px] text-slate-500 truncate leading-tight">CDL: {driver.licenseNumber}</div>
                           </div>
-                          {isSelected && (
-                            <span className="text-[10px] font-bold text-indigo-700 animate-pulse">✓ Chosen</span>
-                          )}
+                          <div className="flex flex-col items-end gap-0.5 shrink-0">
+                            {isSelected ? (
+                              <CheckCircle className="w-3 h-3 text-indigo-600" />
+                            ) : (
+                              <button
+                                type="button"
+                                title="Delete Driver"
+                                onClick={(e) => handleDeleteDriver(driver.id, e)}
+                                className="text-slate-300 hover:text-rose-600 transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -666,14 +678,14 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
           </div>
 
           {/* ================= COLUMN 2: ON THE WAY (Active Trips + History Log) ================= */}
-          <div id="active-completed-dispatch-column" className="lg:col-span-7 space-y-8">
+          <div id="active-completed-dispatch-column" className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             
             {/* ON THE WAY DRIVES & ACTIVE TRIPS */}
             <div id="on-the-way-trips-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center space-x-2">
                   <Navigation className="text-amber-600 h-4 w-4 animate-bounce" />
-                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Dispatched Cargo ("On the Way")</h2>
+                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">On the way</h2>
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="bg-indigo-50 text-indigo-800 text-xs font-mono font-bold px-2.5 py-0.5 rounded-full flex items-center space-x-1">
@@ -784,7 +796,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center space-x-2">
                   <History className="text-slate-700 h-4.5 w-4.5" />
-                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Historical Dispatch Log</h2>
+                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">History</h2>
                 </div>
                 <span className="bg-slate-100 text-slate-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full">
                   {completedTrips.length} total logged
