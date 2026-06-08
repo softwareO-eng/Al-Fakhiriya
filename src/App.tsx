@@ -155,11 +155,17 @@ export default function App() {
       setStatusText('Sandbox Mode (Local Storage)');
     }
 
+    // Setup fallback timeout so the UI never hangs indefinitely while waiting for Firestore
+    const loadingTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 800);
+
     // Subscribe to Trucks
     const unsubscribeTrucks = subscribeTrucks(
       configToUse,
       (updatedTrucks) => {
         setTrucks(updatedTrucks);
+        clearTimeout(loadingTimeout);
         setLoading(false);
       },
       (err) => {
@@ -168,6 +174,7 @@ export default function App() {
           setLocalFallbackActive(true);
           setStatusText('Sandbox Mode (Offline Fallback)');
         }
+        clearTimeout(loadingTimeout);
         setLoading(false);
       }
     );
