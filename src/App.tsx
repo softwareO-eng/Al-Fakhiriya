@@ -44,6 +44,7 @@ import {
 import FirebaseConfigModal from './components/FirebaseConfigModal';
 import TripAssignmentModal from './components/TripAssignmentModal';
 import AddAssetModal from './components/AddAssetModal';
+import ConfirmModal from './components/ConfirmModal';
 import MapDirectionLink from './components/MapDirectionLink';
 import KeyDiagnosticsModal from './components/KeyDiagnosticsModal';
 import AlFakhriLogo from './components/AlFakhriLogo';
@@ -125,6 +126,7 @@ export default function App() {
   const [isAssignOpen, setIsAssignOpen] = useState(false);
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
 
   const [localFallbackActive, setLocalFallbackActive] = useState<boolean>(false);
   const configToUse = localFallbackActive ? null : firebaseConfig;
@@ -309,14 +311,16 @@ export default function App() {
     }
   };
 
-  const handleDeleteTrip = async (trip: Trip, e: React.MouseEvent) => {
+  const handleDeleteTrip = (trip: Trip, e: React.MouseEvent) => {
     e.stopPropagation();
-    const actionLabel = trip.status === 'active' ? 'cancel & abort this active' : 'delete historical';
-    if (!window.confirm(`Are you sure you want to ${actionLabel} dispatch record ${trip.id}?`)) {
-      return;
-    }
+    setTripToDelete(trip);
+  };
+
+  const handleConfirmDeleteTrip = async () => {
+    if (!tripToDelete) return;
     try {
-      await deleteTrip(configToUse, trip);
+      await deleteTrip(configToUse, tripToDelete);
+      setTripToDelete(null);
     } catch (err) {
       alert(`Could not delete trip: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -891,6 +895,16 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
         isOpen={isDiagnosticsOpen} 
         onClose={() => setIsDiagnosticsOpen(false)} 
         firebaseConfigExists={isValidConfig(firebaseConfig)} 
+      />
+
+      <ConfirmModal
+        isOpen={!!tripToDelete}
+        title={tripToDelete?.status === 'active' ? "Cancel Active Dispatch" : "Delete Historical Log"}
+        message={`Are you sure you want to ${tripToDelete?.status === 'active' ? 'cancel and abort' : 'delete'} dispatch record ${tripToDelete?.id}?`}
+        confirmText="Yes, delete it"
+        cancelText="Cancel"
+        onConfirm={handleConfirmDeleteTrip}
+        onCancel={() => setTripToDelete(null)}
       />
 
       {/* Core Footer instructions */}
