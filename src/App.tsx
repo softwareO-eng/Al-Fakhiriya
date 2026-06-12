@@ -38,7 +38,8 @@ import {
   isValidConfig,
   deleteTruck,
   deleteDriver,
-  deleteTrip
+  deleteTrip,
+  getLocalStorageData
 } from './firebaseService';
 
 import FirebaseConfigModal from './components/FirebaseConfigModal';
@@ -115,9 +116,9 @@ export default function App() {
   });
 
   // UI state
-  const [trucks, setTrucks] = useState<Truck[]>([]);
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [trips, setTrips] = useState<Trip[]>([]);
+  const [trucks, setTrucks] = useState<Truck[]>(() => getLocalStorageData().trucks);
+  const [drivers, setDrivers] = useState<Driver[]>(() => getLocalStorageData().drivers);
+  const [trips, setTrips] = useState<Trip[]>(() => getLocalStorageData().trips);
   
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);

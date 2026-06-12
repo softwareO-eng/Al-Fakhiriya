@@ -200,7 +200,7 @@ const safeLocalStorage = {
   }
 };
 
-function getLocalStorageData(): { trucks: Truck[]; drivers: Driver[]; trips: Trip[] } {
+export function getLocalStorageData(): { trucks: Truck[]; drivers: Driver[]; trips: Trip[] } {
   let trucksRaw = safeLocalStorage.getItem(LS_TRUCKS_KEY);
   let driversRaw = safeLocalStorage.getItem(LS_DRIVERS_KEY);
   let tripsRaw = safeLocalStorage.getItem(LS_TRIPS_KEY);
@@ -336,6 +336,7 @@ export function subscribeTrucks(
       });
       // Sort alphabetically/numerically by id
       trucks.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+      safeLocalStorage.setItem(LS_TRUCKS_KEY, JSON.stringify(trucks));
       onUpdate(trucks);
     },
     (error) => {
@@ -379,6 +380,7 @@ export function subscribeDrivers(
         });
       });
       drivers.sort((a, b) => a.name.localeCompare(b.name));
+      safeLocalStorage.setItem(LS_DRIVERS_KEY, JSON.stringify(drivers));
       onUpdate(drivers);
     },
     (error) => {
@@ -428,6 +430,7 @@ export function subscribeTrips(
       });
       // Sort trips by departure time (descending: newest first)
       trips.sort((a, b) => b.startTime.localeCompare(a.startTime));
+      safeLocalStorage.setItem(LS_TRIPS_KEY, JSON.stringify(trips));
       onUpdate(trips);
     },
     (error) => {
