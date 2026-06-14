@@ -133,6 +133,9 @@ export default function App() {
   const [truckTypeFilter, setTruckTypeFilter] = useState<'All' | 'Flat Bed' | 'Low Bed'>('All');
   const [axleFilter, setAxleFilter] = useState<'All' | 3 | 4 | 5>('All');
 
+  // History Filter
+  const [historyFilter, setHistoryFilter] = useState<'Daily' | 'Weekly' | 'Monthly' | 'All'>('All');
+
   const [localFallbackActive, setLocalFallbackActive] = useState<boolean>(false);
   const configToUse = localFallbackActive ? null : firebaseConfig;
 
@@ -348,6 +351,51 @@ export default function App() {
 
   const activeTrips = trips.filter((t) => t.status === 'active');
   const completedTrips = trips.filter((t) => t.status === 'completed');
+
+  // History Trip Processing
+  const getFilteredHistoryTrips = () => {
+    let filtered = [...completedTrips];
+    const now = new Date();
+    
+    if (historyFilter !== 'All') {
+      filtered = filtered.filter(trip => {
+        if (!trip.completedTime) return false;
+        const compDate = new Date(trip.completedTime);
+        const diffTime = Math.abs(now.getTime() - compDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (historyFilter === 'Daily') return diffDays <= 1;
+        if (historyFilter === 'Weekly') return diffDays <= 7;
+        if (historyFilter === 'Monthly') return diffDays <= 30;
+        return true;
+      });
+    }
+
+    // Group by Date wise
+    const grouped: { [dateStr: string]: Trip[] } = {};
+    filtered.forEach(trip => {
+      let dateStr = 'Unknown Date';
+      if (trip.completedTime) {
+        const d = new Date(trip.completedTime);
+        if (!isNaN(d.getTime())) {
+          dateStr = d.toLocaleDateString([], { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+        }
+      }
+      if (!grouped[dateStr]) grouped[dateStr] = [];
+      grouped[dateStr].push(trip);
+    });
+
+    // Sort dates descending
+    const sortedDates = Object.keys(grouped).sort((a, b) => {
+      if (a === 'Unknown Date') return 1;
+      if (b === 'Unknown Date') return -1;
+      return new Date(b).getTime() - new Date(a).getTime();
+    });
+
+    return { filtered, grouped, sortedDates };
+  };
+
+  const { filtered: displayedCompletedTrips, grouped: groupedCompletedTrips, sortedDates: completedTripsDates } = getFilteredHistoryTrips();
 
   // Format Dates nicely
   const formatDate = (isoStr: string) => {
@@ -886,61 +934,90 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
             </div>
 
             {/* HISTORICAL REGISTRY OF COMPLETED TRIPS */}
-            <div id="completed-history-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div id="completed-history-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4 flex flex-col h-full max-h-[600px]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-3 shrink-0">
                 <div className="flex items-center space-x-2">
                   <History className="text-slate-700 h-4.5 w-4.5" />
-                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">History</h2>
+                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">History Log</h2>
                 </div>
-                <span className="bg-slate-100 text-slate-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full">
-                  {completedTrips.length} total logged
-                </span>
+                
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
+                  <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
+                    {['Daily', 'Weekly', 'Monthly', 'All'].map(filter => (
+                      <button
+                        key={filter}
+                        onClick={() => setHistoryFilter(filter as any)}
+                        className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                          historyFilter === filter 
+                            ? 'bg-white text-slate-800 shadow-sm' 
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        {filter}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-lg shrink-0 transition-all">
+                    {displayedCompletedTrips.length} Trips
+                  </span>
+                </div>
               </div>
 
-              {completedTrips.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs">
-                  <p>Historical runs registry is empty.</p>
+              {displayedCompletedTrips.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs flex-1">
+                  <p>No historical runs match the selected filter.</p>
                   <p className="text-[10px] mt-0.5">Completed transits appear logged here for audit trails.</p>
                 </div>
               ) : (
-                <div id="completed-logs-list" className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-                  {completedTrips.map((log) => (
-                    <div
-                      key={log.id}
-                      id={`log-card-${log.id}`}
-                      className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 flex items-center justify-between text-xs hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center space-x-2">
-                          <span className="bg-slate-200 text-slate-800 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase">
-                            Delivered
-                          </span>
-                          <span className="font-mono text-[10px] text-slate-400 font-bold">{log.id}</span>
-                        </div>
-                        <p className="font-semibold text-slate-900 truncate">
-                          {log.from} ➔ {log.to}
-                        </p>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          Rig: <strong>{log.truckId}</strong> | Driver: <strong>{log.driverName}</strong>
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          Arrival: {formatDate(log.completedTime || '')}
-                        </div>
+                <div id="completed-logs-list" className="space-y-4 overflow-y-auto pr-2 flex-1 pb-2">
+                  {completedTripsDates.map((dateGroup) => (
+                    <div key={dateGroup} className="space-y-2">
+                      <div className="sticky top-0 bg-white/95 backdrop-blur z-10 py-1.5 border-b border-slate-50 flex items-baseline gap-2">
+                        <h3 className="text-xs font-bold text-slate-800 tracking-wider uppercase">{dateGroup}</h3>
+                        <span className="text-[10px] text-slate-400 font-mono bg-slate-100 px-1.5 rounded">{groupedCompletedTrips[dateGroup].length} runs</span>
                       </div>
+                      <div className="space-y-2">
+                        {groupedCompletedTrips[dateGroup].map((log) => (
+                          <div
+                            key={log.id}
+                            id={`log-card-${log.id}`}
+                            className="bg-slate-50/50 p-3.5 rounded-xl border border-slate-100 flex items-center justify-between text-xs hover:bg-slate-50 transition-colors"
+                          >
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <span className="bg-slate-200 text-slate-800 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase">
+                                  Delivered
+                                </span>
+                                <span className="font-mono text-[10px] text-slate-400 font-bold">{log.id}</span>
+                              </div>
+                              <p className="font-semibold text-slate-900 truncate">
+                                {log.from} ➔ {log.to}
+                              </p>
+                              <div className="text-[10px] text-slate-500 font-mono">
+                                Rig: <strong>{log.truckId}</strong> | Driver: <strong>{log.driverName}</strong>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono mt-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+                                {formatDate(log.completedTime || '')} 
+                              </div>
+                            </div>
 
-                      <div className="flex items-center space-x-2 shrink-0">
-                        <div className="text-[10px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-1 rounded">
-                          ✓ Complete
-                        </div>
-                        <button
-                          type="button"
-                          id={`delete-log-button-${log.id}`}
-                          title="Delete Historical Log"
-                          onClick={(e) => handleDeleteTrip(log, e)}
-                          className="p-1 px-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                            <div className="flex flex-col items-end gap-2 shrink-0">
+                              <div className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
+                                ✓ Complete
+                              </div>
+                              <button
+                                type="button"
+                                id={`delete-log-button-${log.id}`}
+                                title="Delete Historical Log"
+                                onClick={(e) => handleDeleteTrip(log, e)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   ))}
