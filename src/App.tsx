@@ -134,7 +134,8 @@ export default function App() {
   const [axleFilter, setAxleFilter] = useState<'All' | 3 | 4 | 5>('All');
 
   // History Filter
-  const [historyFilter, setHistoryFilter] = useState<'Daily' | 'Weekly' | 'Monthly' | 'All'>('All');
+  const [historyFilter, setHistoryFilter] = useState<'Daily' | 'Weekly' | 'Monthly' | 'All' | 'Custom'>('All');
+  const [historyCustomDate, setHistoryCustomDate] = useState<string>(''); // YYYY-MM-DD
 
   const [localFallbackActive, setLocalFallbackActive] = useState<boolean>(false);
   const configToUse = localFallbackActive ? null : firebaseConfig;
@@ -367,6 +368,15 @@ export default function App() {
         if (historyFilter === 'Daily') return diffDays <= 1;
         if (historyFilter === 'Weekly') return diffDays <= 7;
         if (historyFilter === 'Monthly') return diffDays <= 30;
+        if (historyFilter === 'Custom' && historyCustomDate) {
+          const selectedDate = new Date(historyCustomDate);
+          return (
+            compDate.getFullYear() === selectedDate.getFullYear() &&
+            compDate.getMonth() === selectedDate.getMonth() &&
+            compDate.getDate() === selectedDate.getDate()
+          );
+        }
+        if (historyFilter === 'Custom' && !historyCustomDate) return true; // Show all if no date selected
         return true;
       });
     }
@@ -943,7 +953,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                 
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
                   <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
-                    {['Daily', 'Weekly', 'Monthly', 'All'].map(filter => (
+                    {['Daily', 'Weekly', 'Monthly', 'Custom', 'All'].map(filter => (
                       <button
                         key={filter}
                         onClick={() => setHistoryFilter(filter as any)}
@@ -957,6 +967,14 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                       </button>
                     ))}
                   </div>
+                  {historyFilter === 'Custom' && (
+                    <input 
+                      type="date" 
+                      value={historyCustomDate}
+                      onChange={(e) => setHistoryCustomDate(e.target.value)}
+                      className="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 bg-white"
+                    />
+                  )}
                   <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-lg shrink-0 transition-all">
                     {displayedCompletedTrips.length} Trips
                   </span>
