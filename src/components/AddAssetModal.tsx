@@ -31,6 +31,8 @@ export default function AddAssetModal({
   const [capacity, setCapacity] = useState('');
   const [fuelType, setFuelType] = useState('Diesel');
   const [currentMileage, setCurrentMileage] = useState('');
+  const [truckType, setTruckType] = useState<'Flat Bed' | 'Low Bed'>('Flat Bed');
+  const [axles, setAxles] = useState<3 | 4 | 5>(3);
   
   // Driver only fields
   const [license, setLicense] = useState('');
@@ -62,6 +64,8 @@ export default function AddAssetModal({
           capacity: capacity.trim() || '45,000 lbs',
           fuelType: fuelType || 'Diesel',
           currentMileage: currentMileage.trim() || '0 mi',
+          type: truckType,
+          axles: axles,
         };
         await onAddTruck(newTruck);
       } else {
@@ -88,6 +92,8 @@ export default function AddAssetModal({
       setCapacity('');
       setFuelType('Diesel');
       setCurrentMileage('');
+      setTruckType('Flat Bed');
+      setAxles(3);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Database sync connection error.');
@@ -244,6 +250,37 @@ export default function AddAssetModal({
                     placeholder="e.g. 142,500 mi"
                     className="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0e5697] text-slate-800 font-mono"
                   />
+                </div>
+                <div className="col-span-2 grid grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-[10px] font-mono font-medium text-slate-500 uppercase tracking-wider mb-1">
+                      Truck Type
+                    </label>
+                    <select
+                      id="truck-type-input"
+                      value={truckType}
+                      onChange={(e) => setTruckType(e.target.value as 'Flat Bed' | 'Low Bed')}
+                      className="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0e5697] text-slate-800 bg-white"
+                    >
+                      <option value="Flat Bed">Flat Bed</option>
+                      <option value="Low Bed">Low Bed</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono font-medium text-slate-500 uppercase tracking-wider mb-1">
+                      Axles
+                    </label>
+                    <select
+                      id="truck-axles-input"
+                      value={axles}
+                      onChange={(e) => setAxles(parseInt(e.target.value) as 3 | 4 | 5)}
+                      className="w-full text-sm px-3.5 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-[#0e5697] text-slate-800 bg-white"
+                    >
+                      <option value={3}>3 Axle</option>
+                      <option value={4}>4 Axle</option>
+                      <option value={5}>5 Axle</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             )}

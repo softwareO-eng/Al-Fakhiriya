@@ -17,6 +17,8 @@ export interface Truck {
   capacity?: string;
   fuelType?: string;
   currentMileage?: string | number;
+  type?: 'Flat Bed' | 'Low Bed';
+  axles?: 3 | 4 | 5;
 }
 
 export interface Driver {

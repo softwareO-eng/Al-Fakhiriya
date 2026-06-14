@@ -129,6 +129,10 @@ export default function App() {
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
 
+  // Filters for Available Trucks
+  const [truckTypeFilter, setTruckTypeFilter] = useState<'All' | 'Flat Bed' | 'Low Bed'>('All');
+  const [axleFilter, setAxleFilter] = useState<'All' | 3 | 4 | 5>('All');
+
   const [localFallbackActive, setLocalFallbackActive] = useState<boolean>(false);
   const configToUse = localFallbackActive ? null : firebaseConfig;
 
@@ -329,6 +333,14 @@ export default function App() {
 
   // Filter lists
   const availableTrucks = trucks.filter((t) => t.status === 'Available');
+  
+  const filteredAvailableTrucks = availableTrucks.filter((t) => {
+    const typeMatches = truckTypeFilter === 'All' || (truckTypeFilter === 'Flat Bed' ? (t.type === 'Flat Bed' || !t.type) : t.type === truckTypeFilter);
+    const axleValue = t.axles || 3;
+    const axleMatches = axleFilter === 'All' || axleValue === axleFilter;
+    return typeMatches && axleMatches;
+  });
+
   const onTheWayTrucks = trucks.filter((t) => t.status === 'On the way');
 
   const availableDrivers = drivers.filter((d) => d.status === 'Available');
@@ -430,6 +442,12 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
+
+  // Fleet Overview Stats
+  const flatBedTrucks = availableTrucks.filter(t => t.type === 'Flat Bed' || !t.type); // Default to Flat Bed if undefined for old data
+  const lowBedTrucks = availableTrucks.filter(t => t.type === 'Low Bed');
+
+  const getAxleCount = (list: Truck[], axle: number) => list.filter(t => t.axles === axle || (!t.axles && axle === 3)).length;
 
   return (
     <div id="app-root-container" className="bg-slate-50 min-h-screen text-slate-900 font-sans antialiased pb-16 selection:bg-indigo-100">
@@ -561,62 +579,134 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
           <div id="available-vehicles-drivers-column" className="space-y-8">
             
             {/* AVAILABLE TRUCKS SECTION */}
-            <div id="available-trucks-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div id="available-trucks-container" className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
                 <div className="flex items-center space-x-2">
-                  <TruckIcon className="text-slate-700 h-4.5 w-4.5" />
-                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Available trucks</h2>
+                  <div className="h-8 w-8 flex items-center justify-center rounded bg-indigo-50 text-indigo-600">
+                    <TruckIcon className="text-indigo-700 h-4 w-4" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-slate-800 tracking-tight text-sm uppercase">TOTAL TRUCKS</h2>
+                    <div className="text-lg font-bold text-slate-900 leading-none">{availableTrucks.length}</div>
+                  </div>
                 </div>
-                <span className="bg-slate-100 text-slate-800 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full">
-                  {availableTrucks.length}
-                </span>
               </div>
 
-               {availableTrucks.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs">
-                  <p>All fleet rigs are currently fully dispatched.</p>
-                  <p className="text-[10px] mt-0.5">Wait for active runs to clear or add more rigs above.</p>
-                </div>
-              ) : (
-                <div id="available-trucks-grid" className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 xl:grid-cols-12 2xl:grid-cols-16 gap-1 pr-1">
-                  {availableTrucks.map((truck) => {
-                    const isSelected = selectedTruck?.id === truck.id;
-                    return (
-                      <div
-                        key={truck.id}
-                        id={`truck-card-${truck.id}`}
-                        onClick={() => setSelectedTruck(isSelected ? null : truck)}
-                        className={`p-1 rounded md:rounded-md border cursor-pointer select-none transition-all ${
-                          isSelected
-                            ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between min-w-0">
-                          <div className="flex-1 min-w-0 pr-0.5">
-                            <div className="font-mono font-bold text-slate-900 text-[9px] truncate leading-tight">{truck.id}</div>
-                            <div className="font-mono text-[8px] text-slate-500 truncate leading-tight">Plt: {truck.licensePlate || 'N/A'}</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Flat Bed Box */}
+                <div className="bg-white rounded-xl border border-slate-200/80 p-4 flex flex-col space-y-3">
+                  <div className="flex items-start justify-between border-b border-slate-100 pb-2">
+                    <div>
+                      <h3 className="font-bold text-slate-800 uppercase tracking-wide text-xs mb-0.5">FLAT BED</h3>
+                      <div className="text-slate-500 font-mono text-xs">Total: <span className="font-bold text-slate-900">{flatBedTrucks.length}</span></div>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-50 border border-slate-100 rounded p-1.5 flex gap-3">
+                      <div className="flex flex-col items-center"><span className="text-slate-400">3A</span> <span className="font-bold">{getAxleCount(flatBedTrucks, 3)}</span></div>
+                      <div className="flex flex-col items-center"><span className="text-slate-400">4A</span> <span className="font-bold">{getAxleCount(flatBedTrucks, 4)}</span></div>
+                      <div className="flex flex-col items-center"><span className="text-slate-400">5A</span> <span className="font-bold">{getAxleCount(flatBedTrucks, 5)}</span></div>
+                    </div>
+                  </div>
+                  
+                  {flatBedTrucks.length > 0 && (
+                     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-1 pt-1">
+                      {flatBedTrucks.map((truck) => {
+                        const isSelected = selectedTruck?.id === truck.id;
+                        return (
+                          <div
+                            key={truck.id}
+                            id={`truck-card-${truck.id}`}
+                            onClick={() => setSelectedTruck(isSelected ? null : truck)}
+                            className={`p-1 rounded border cursor-pointer select-none transition-all ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
+                                : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex flex-col justify-between h-full min-w-0">
+                              <div className="flex justify-between items-start">
+                                <div className="font-mono font-bold text-slate-900 text-[9px] truncate">{truck.id}</div>
+                                {isSelected ? (
+                                  <CheckCircle className="w-3 h-3 text-indigo-600 shrink-0" />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    title="Delete Truck"
+                                    onClick={(e) => handleDeleteTruck(truck.id, e)}
+                                    className="text-slate-300 hover:text-rose-600 transition-colors pointer-events-auto shrink-0"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="mt-0.5 flex justify-between items-end">
+                                <div className="font-mono text-[8px] text-slate-500 truncate">{truck.licensePlate || 'No Plt'}</div>
+                                <div className="font-mono text-[8px] text-slate-600 font-medium bg-slate-100 rounded px-1">{truck.axles || 3}A</div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex flex-col items-end gap-0.5 shrink-0">
-                            {isSelected ? (
-                              <CheckCircle className="w-3 h-3 text-indigo-600" />
-                            ) : (
-                              <button
-                                type="button"
-                                title="Delete Truck"
-                                onClick={(e) => handleDeleteTruck(truck.id, e)}
-                                className="text-slate-300 hover:text-rose-600 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {/* Low Bed Box */}
+                <div className="bg-white rounded-xl border border-slate-200/80 p-4 flex flex-col space-y-3">
+                  <div className="flex items-start justify-between border-b border-slate-100 pb-2">
+                    <div>
+                      <h3 className="font-bold text-slate-800 uppercase tracking-wide text-xs mb-0.5">LOW BED</h3>
+                      <div className="text-slate-500 font-mono text-xs">Total: <span className="font-bold text-slate-900">{lowBedTrucks.length}</span></div>
+                    </div>
+                    <div className="text-[10px] font-mono bg-slate-50 border border-slate-100 rounded p-1.5 flex gap-3">
+                      <div className="flex flex-col items-center"><span className="text-slate-400">3A</span> <span className="font-bold">{getAxleCount(lowBedTrucks, 3)}</span></div>
+                      <div className="flex flex-col items-center"><span className="text-slate-400">4A</span> <span className="font-bold">{getAxleCount(lowBedTrucks, 4)}</span></div>
+                      <div className="flex flex-col items-center"><span className="text-slate-400">5A</span> <span className="font-bold">{getAxleCount(lowBedTrucks, 5)}</span></div>
+                    </div>
+                  </div>
+                  
+                  {lowBedTrucks.length > 0 && (
+                     <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-1 pt-1">
+                      {lowBedTrucks.map((truck) => {
+                        const isSelected = selectedTruck?.id === truck.id;
+                        return (
+                          <div
+                            key={truck.id}
+                            id={`truck-card-${truck.id}`}
+                            onClick={() => setSelectedTruck(isSelected ? null : truck)}
+                            className={`p-1 rounded border cursor-pointer select-none transition-all ${
+                              isSelected
+                                ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
+                                : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex flex-col justify-between h-full min-w-0">
+                              <div className="flex justify-between items-start">
+                                <div className="font-mono font-bold text-slate-900 text-[9px] truncate">{truck.id}</div>
+                                {isSelected ? (
+                                  <CheckCircle className="w-3 h-3 text-indigo-600 shrink-0" />
+                                ) : (
+                                  <button
+                                    type="button"
+                                    title="Delete Truck"
+                                    onClick={(e) => handleDeleteTruck(truck.id, e)}
+                                    className="text-slate-300 hover:text-rose-600 transition-colors pointer-events-auto shrink-0"
+                                  >
+                                    <Trash2 className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="mt-0.5 flex justify-between items-end">
+                                <div className="font-mono text-[8px] text-slate-500 truncate">{truck.licensePlate || 'No Plt'}</div>
+                                <div className="font-mono text-[8px] text-slate-600 font-medium bg-slate-100 rounded px-1">{truck.axles || 3}A</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* AVAILABLE DRIVERS SECTION */}

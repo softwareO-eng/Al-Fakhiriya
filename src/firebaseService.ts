@@ -77,7 +77,9 @@ export const SEED_TRUCKS: Truck[] = [
     licensePlate: 'TX-RD-9102',
     capacity: '48,000 lbs',
     fuelType: 'Diesel',
-    currentMileage: '142,500 mi'
+    currentMileage: '142,500 mi',
+    type: 'Flat Bed',
+    axles: 4
   },
   { 
     id: 'TRK-102', 
@@ -88,7 +90,9 @@ export const SEED_TRUCKS: Truck[] = [
     licensePlate: 'IL-PT-5790',
     capacity: '45,000 lbs',
     fuelType: 'Diesel',
-    currentMileage: '48,200 mi'
+    currentMileage: '48,200 mi',
+    type: 'Flat Bed',
+    axles: 5
   },
   { 
     id: 'TRK-103', 
@@ -99,7 +103,9 @@ export const SEED_TRUCKS: Truck[] = [
     licensePlate: 'CA-FL-4411',
     capacity: '44,000 lbs',
     fuelType: 'Diesel',
-    currentMileage: '280,100 mi'
+    currentMileage: '280,100 mi',
+    type: 'Low Bed',
+    axles: 3
   },
   { 
     id: 'TRK-104', 
@@ -110,7 +116,9 @@ export const SEED_TRUCKS: Truck[] = [
     licensePlate: 'NY-VV-8601',
     capacity: '50,000 lbs',
     fuelType: 'Electric',
-    currentMileage: '12,400 mi'
+    currentMileage: '12,400 mi',
+    type: 'Low Bed',
+    axles: 4
   }
 ];
 
@@ -331,7 +339,9 @@ export function subscribeTrucks(
           licensePlate: data.licensePlate || '',
           capacity: data.capacity || '',
           fuelType: data.fuelType || '',
-          currentMileage: data.currentMileage || ''
+          currentMileage: data.currentMileage || '',
+          type: data.type,
+          axles: data.axles
         });
       });
       // Sort alphabetically/numerically by id
