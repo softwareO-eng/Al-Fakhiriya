@@ -39,7 +39,9 @@ import {
   deleteTruck,
   deleteDriver,
   deleteTrip,
-  getLocalStorageData
+  getLocalStorageData,
+  updateTruckStatus,
+  updateDriverStatus
 } from './firebaseService';
 
 import FirebaseConfigModal from './components/FirebaseConfigModal';
@@ -320,6 +322,28 @@ export default function App() {
     }
   };
 
+  const handleSetTruckStatus = async (truckId: string, status: 'Available' | 'Maintenance') => {
+    try {
+      if (selectedTruck?.id === truckId) {
+        setSelectedTruck(null);
+      }
+      await updateTruckStatus(configToUse, truckId, status);
+    } catch (err) {
+      alert(`Could not update truck status: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleSetDriverStatus = async (driverId: string, status: 'Available' | 'Medical Leave' | 'Off Duty') => {
+    try {
+      if (selectedDriver?.id === driverId) {
+        setSelectedDriver(null);
+      }
+      await updateDriverStatus(configToUse, driverId, status);
+    } catch (err) {
+      alert(`Could not update driver status: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const handleDeleteTrip = (trip: Trip, e: React.MouseEvent) => {
     e.stopPropagation();
     setTripToDelete(trip);
@@ -346,9 +370,11 @@ export default function App() {
   });
 
   const onTheWayTrucks = trucks.filter((t) => t.status === 'On the way');
+  const maintenanceTrucks = trucks.filter((t) => t.status === 'Maintenance');
 
   const availableDrivers = drivers.filter((d) => d.status === 'Available');
   const onTheWayDrivers = drivers.filter((d) => d.status === 'On the way');
+  const leavesDrivers = drivers.filter((d) => d.status === 'Medical Leave' || d.status === 'Off Duty');
 
   const activeTrips = trips.filter((t) => t.status === 'active');
   const completedTrips = trips.filter((t) => t.status === 'completed');
@@ -606,7 +632,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
               </div>
             </div>
 
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 id="reset-selection-triggers"
                 onClick={() => {
@@ -617,6 +643,30 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
               >
                 Clear Selection
               </button>
+              {selectedTruck && !selectedDriver && selectedTruck.status === 'Available' && (
+                <button
+                  onClick={() => handleSetTruckStatus(selectedTruck.id, 'Maintenance')}
+                  className="bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-xl text-xs font-semibold text-slate-950 shadow-sm transition-all"
+                >
+                  🛠️ Send to Maintenance
+                </button>
+              )}
+              {selectedDriver && !selectedTruck && selectedDriver.status === 'Available' && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleSetDriverStatus(selectedDriver.id, 'Medical Leave')}
+                    className="bg-rose-500 hover:bg-rose-600 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-all"
+                  >
+                    🩺 Medical Leave
+                  </button>
+                  <button
+                    onClick={() => handleSetDriverStatus(selectedDriver.id, 'Off Duty')}
+                    className="bg-sky-600 hover:bg-sky-700 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm"
+                  >
+                    💤 Off Duty
+                  </button>
+                </div>
+              )}
               {selectedTruck && selectedDriver && (
                 <button
                   id="open-assignment-direct"
@@ -823,6 +873,83 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+
+            {/* OUT-OF-SERVICE REGISTRY (MAINTENANCE, MEDICAL LEAVE, OFF-DUTY OFFERS) */}
+            <div id="out-of-service-registry-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center space-x-2">
+                  <Settings className="text-slate-700 h-4 w-4" />
+                  <h2 className="font-bold text-slate-900 tracking-tight text-sm">Out-of-Service Registry (Maintenance & Leaves)</h2>
+                </div>
+                <div className="flex bg-slate-100 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-slate-800 gap-1.5">
+                  <span>🛠️ {maintenanceTrucks.length} Rigs</span>
+                  <span>🩺 {leavesDrivers.length} Pilots</span>
+                </div>
+              </div>
+
+              {maintenanceTrucks.length === 0 && leavesDrivers.length === 0 ? (
+                <div className="py-6 text-center text-slate-400 text-xs">
+                  <p>All fleet assets & CDL pilots are in prime running state.</p>
+                  <p className="text-[10px] mt-1 text-slate-400">Select any resource and click the maintenance / leave buttons above to manage down times.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Under Maintenance Rigs */}
+                  {maintenanceTrucks.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">🚛 Rigs in Maintenance ({maintenanceTrucks.length})</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {maintenanceTrucks.map((truck) => (
+                          <div key={truck.id} className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex flex-col justify-between space-y-2 text-xs">
+                            <div>
+                              <div className="font-bold text-slate-900 font-mono text-[10px]">{truck.id}</div>
+                              <div className="text-[10px] text-slate-500 truncate">{truck.name}</div>
+                              <div className="text-[9px] text-amber-700 font-medium font-mono mt-1">Status: Maintenance</div>
+                            </div>
+                            <button
+                              onClick={() => handleSetTruckStatus(truck.id, 'Available')}
+                              className="w-full text-center bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border border-amber-200 font-semibold py-1 rounded-lg text-[10px] transition-colors cursor-pointer"
+                            >
+                              🛠️ Make Ready
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drivers on Medical / Off-duty leaves */}
+                  {leavesDrivers.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">👔 Pilots on Status Leave ({leavesDrivers.length})</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {leavesDrivers.map((driver) => (
+                          <div key={driver.id} className="bg-rose-50/50 border border-rose-100 rounded-xl p-3 flex flex-col justify-between space-y-2 text-xs">
+                            <div>
+                              <div className="font-bold text-slate-900 text-[10px] truncate">{driver.name}</div>
+                              <div className="text-[10px] text-slate-500 font-mono text-[9px]">{driver.id}</div>
+                              <div className="text-[9px] font-semibold mt-1 font-mono flex items-center gap-1">
+                                {driver.status === 'Medical Leave' ? (
+                                  <span className="text-rose-700">🩺 Medical Leave</span>
+                                ) : (
+                                  <span className="text-slate-600">💤 Off Duty</span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleSetDriverStatus(driver.id, 'Available')}
+                              className="w-full text-center bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-rose-200 font-semibold py-1 rounded-lg text-[10px] transition-colors cursor-pointer"
+                            >
+                              🩺 Return to Duty
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

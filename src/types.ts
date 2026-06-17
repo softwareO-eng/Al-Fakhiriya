@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type TruckStatus = 'Available' | 'On the way';
-export type DriverStatus = 'Available' | 'On the way';
+export type TruckStatus = 'Available' | 'On the way' | 'Maintenance';
+export type DriverStatus = 'Available' | 'On the way' | 'Medical Leave' | 'Off Duty';
 export type TripStatus = 'active' | 'completed';
 
 export interface Truck {

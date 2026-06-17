@@ -18,7 +18,7 @@ import {
   deleteDoc,
   Firestore
 } from 'firebase/firestore';
-import { Truck, Driver, Trip, CustomFirebaseConfig } from './types';
+import { Truck, Driver, Trip, CustomFirebaseConfig, TruckStatus, DriverStatus } from './types';
 
 // Standard 8-pillar schema conforming error handler
 export enum OperationType {
@@ -653,6 +653,56 @@ export async function deleteDriver(config: CustomFirebaseConfig | null, driverId
     );
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `drivers/${driverId}`);
+  }
+}
+
+export async function updateTruckStatus(
+  config: CustomFirebaseConfig | null,
+  truckId: string,
+  status: TruckStatus
+): Promise<void> {
+  const db = getFirebaseDb(config);
+  if (!db) {
+    const { trucks, drivers, trips } = getLocalStorageData();
+    const truckIdx = trucks.findIndex(t => t.id === truckId);
+    if (truckIdx !== -1) {
+      trucks[truckIdx].status = status;
+      setLocalStorageData(trucks, drivers, trips);
+      notifyLocalListeners();
+    }
+    return;
+  }
+  try {
+    withTimeout(updateDoc(doc(db, 'trucks', truckId), { status }), 10000, `Updating Truck ${truckId} Status`).catch(error =>
+      handleFirestoreError(error, OperationType.UPDATE, `trucks/${truckId}`)
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `trucks/${truckId}`);
+  }
+}
+
+export async function updateDriverStatus(
+  config: CustomFirebaseConfig | null,
+  driverId: string,
+  status: DriverStatus
+): Promise<void> {
+  const db = getFirebaseDb(config);
+  if (!db) {
+    const { trucks, drivers, trips } = getLocalStorageData();
+    const driverIdx = drivers.findIndex(d => d.id === driverId);
+    if (driverIdx !== -1) {
+      drivers[driverIdx].status = status;
+      setLocalStorageData(trucks, drivers, trips);
+      notifyLocalListeners();
+    }
+    return;
+  }
+  try {
+    withTimeout(updateDoc(doc(db, 'drivers', driverId), { status }), 10000, `Updating Driver ${driverId} Status`).catch(error =>
+      handleFirestoreError(error, OperationType.UPDATE, `drivers/${driverId}`)
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `drivers/${driverId}`);
   }
 }
 
