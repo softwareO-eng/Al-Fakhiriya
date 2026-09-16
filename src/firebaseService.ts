@@ -18,7 +18,7 @@ import {
   deleteDoc,
   Firestore
 } from 'firebase/firestore';
-import { Truck, Driver, Trip, CustomFirebaseConfig, TruckStatus, DriverStatus, AppUser, UserRole } from './types';
+import { Truck, Driver, Trip, CustomFirebaseConfig, TruckStatus, DriverStatus, AppUser, UserRole, MonthlyAssignment } from './types';
 
 // Standard 8-pillar schema conforming error handler
 export enum OperationType {
@@ -215,6 +215,7 @@ export function getFirebaseDb(config: CustomFirebaseConfig | null): Firestore | 
 const LS_TRUCKS_KEY = 'fleet_sandbox_trucks';
 const LS_DRIVERS_KEY = 'fleet_sandbox_drivers';
 const LS_TRIPS_KEY = 'fleet_sandbox_trips';
+const LS_MONTHLY_KEY = 'fleet_sandbox_monthly_assignments';
 const LS_USERS_KEY = 'fleet_sandbox_users';
 const LS_USER_PASSWORDS_KEY = 'fleet_sandbox_user_passwords';
 const LS_AUTH_KEY = 'fleet_sandbox_current_user';
@@ -963,6 +964,57 @@ export async function completeTrip(
   }
 }
 
+export async function deleteTrip(
+  config: CustomFirebaseConfig | null,
+  trip: Trip,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
+  const db = getFirebaseDb(config);
+
+  if (!db) {
+    const { trucks, drivers, trips } = getLocalStorageData();
+    // If trip was active, return truck and drivers to Available
+    if (trip.status === 'active') {
+      const targetTruckIndex = trucks.findIndex(t => t.id === trip.truckId);
+      const targetDriverIndex = drivers.findIndex(d => d.id === trip.driverId);
+      const targetSecondDriverIndex = trip.secondDriverId ? drivers.findIndex(d => d.id === trip.secondDriverId) : -1;
+
+      if (targetTruckIndex !== -1) trucks[targetTruckIndex].status = 'Available';
+      if (targetDriverIndex !== -1) drivers[targetDriverIndex].status = 'Available';
+      if (targetSecondDriverIndex !== -1) drivers[targetSecondDriverIndex].status = 'Available';
+    }
+
+    const updatedTrips = trips.filter(t => t.id !== trip.id);
+    setLocalStorageData(trucks, drivers, updatedTrips);
+    notifyLocalListeners();
+    return;
+  }
+
+  try {
+    const batch = writeBatch(db);
+    if (trip.status === 'active') {
+      const truckRef = doc(db, 'trucks', trip.truckId);
+      batch.update(truckRef, { status: 'Available' });
+
+      const driverRef = doc(db, 'drivers', trip.driverId);
+      batch.update(driverRef, { status: 'Available' });
+
+      if (trip.secondDriverId) {
+        const secondDriverRef = doc(db, 'drivers', trip.secondDriverId);
+        batch.update(secondDriverRef, { status: 'Available' });
+      }
+    }
+
+    const tripRef = doc(db, 'trips', trip.id);
+    batch.delete(tripRef);
+
+    await withTimeout(batch.commit(), 10000, `Deleting Trip ${trip.id}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `trips/${trip.id}`);
+  }
+}
+
 // Add sample trucks & drivers to sandbox or Firestore
 export async function addNewTruck(
   config: CustomFirebaseConfig | null,
@@ -1114,48 +1166,138 @@ export async function updateDriverStatus(
   }
 }
 
-export async function deleteTrip(
+export function subscribeMonthlyAssignments(
   config: CustomFirebaseConfig | null,
-  trip: Trip,
+  onUpdate: (assignments: MonthlyAssignment[]) => void,
+  onError: (err: Error) => void
+): () => void {
+  const db = getFirebaseDb(config);
+  if (!db) {
+    const sync = () => {
+      const raw = safeLocalStorage.getItem(LS_MONTHLY_KEY);
+      let assignments: MonthlyAssignment[] = [];
+      if (raw) {
+        try { assignments = JSON.parse(raw); } catch (e) { assignments = []; }
+      }
+      onUpdate(assignments);
+    };
+    sync();
+    return subscribeToLocalChanges(sync);
+  }
+
+  return onSnapshot(
+    collection(db, 'monthly_assignments'),
+    (snapshot) => {
+      const assignments: MonthlyAssignment[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        assignments.push({
+          id: doc.id,
+          truckId: data.truckId || '',
+          truckName: data.truckName || '',
+          companyName: data.companyName || '',
+          startDate: data.startDate || '',
+          monthlyRate: data.monthlyRate || '',
+          notes: data.notes || ''
+        });
+      });
+      safeLocalStorage.setItem(LS_MONTHLY_KEY, JSON.stringify(assignments));
+      onUpdate(assignments);
+    },
+    (error) => {
+      onError(new Error(JSON.stringify({
+        error: error.message,
+        operationType: OperationType.LIST,
+        path: 'monthly_assignments'
+      })));
+    }
+  );
+}
+
+export async function assignTruckMonthly(
+  config: CustomFirebaseConfig | null,
+  assignment: Omit<MonthlyAssignment, 'id'>,
+  operator?: AppUser | null
+): Promise<string> {
+  checkAdminPermission(operator);
+  const db = getFirebaseDb(config);
+  const id = 'MONTH-' + Date.now();
+  const newAssignment: MonthlyAssignment = { ...assignment, id };
+
+  if (!db) {
+    const raw = safeLocalStorage.getItem(LS_MONTHLY_KEY);
+    let assignments: MonthlyAssignment[] = [];
+    if (raw) {
+      try { assignments = JSON.parse(raw); } catch (e) { assignments = []; }
+    }
+    assignments.push(newAssignment);
+    safeLocalStorage.setItem(LS_MONTHLY_KEY, JSON.stringify(assignments));
+
+    // Update truck status to 'Monthly'
+    const { trucks, drivers, trips } = getLocalStorageData();
+    const truckIdx = trucks.findIndex(t => t.id === assignment.truckId);
+    if (truckIdx !== -1) {
+      trucks[truckIdx].status = 'Monthly';
+      setLocalStorageData(trucks, drivers, trips);
+    }
+    notifyLocalListeners();
+    return id;
+  }
+
+  try {
+    const batch = writeBatch(db);
+    const assignmentRef = doc(db, 'monthly_assignments', id);
+    batch.set(assignmentRef, newAssignment);
+
+    const truckRef = doc(db, 'trucks', assignment.truckId);
+    batch.update(truckRef, { status: 'Monthly' });
+
+    await withTimeout(batch.commit(), 10000, 'Assign Truck Monthly');
+    return id;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `monthly_assignments/${id}`);
+  }
+}
+
+export async function removeMonthlyAssignment(
+  config: CustomFirebaseConfig | null,
+  assignmentId: string,
+  truckId: string,
   operator?: AppUser | null
 ): Promise<void> {
   checkAdminPermission(operator);
   const db = getFirebaseDb(config);
+
   if (!db) {
-    const { trucks, drivers, trips } = getLocalStorageData();
-    if (trip.status === 'active') {
-      const truckIdx = trucks.findIndex(t => t.id === trip.truckId);
-      if (truckIdx !== -1) trucks[truckIdx].status = 'Available';
-      const driverIdx = drivers.findIndex(d => d.id === trip.driverId);
-      if (driverIdx !== -1) drivers[driverIdx].status = 'Available';
-      if (trip.secondDriverId) {
-        const secondDriverIdx = drivers.findIndex(d => d.id === trip.secondDriverId);
-        if (secondDriverIdx !== -1) drivers[secondDriverIdx].status = 'Available';
-      }
+    const raw = safeLocalStorage.getItem(LS_MONTHLY_KEY);
+    let assignments: MonthlyAssignment[] = [];
+    if (raw) {
+      try { assignments = JSON.parse(raw); } catch (e) { assignments = []; }
     }
-    const updatedTrips = trips.filter(t => t.id !== trip.id);
-    setLocalStorageData(trucks, drivers, updatedTrips);
+    const updated = assignments.filter(a => a.id !== assignmentId);
+    safeLocalStorage.setItem(LS_MONTHLY_KEY, JSON.stringify(updated));
+
+    // Revert truck status to 'Available'
+    const { trucks, drivers, trips } = getLocalStorageData();
+    const truckIdx = trucks.findIndex(t => t.id === truckId);
+    if (truckIdx !== -1) {
+      trucks[truckIdx].status = 'Available';
+      setLocalStorageData(trucks, drivers, trips);
+    }
     notifyLocalListeners();
     return;
   }
+
   try {
     const batch = writeBatch(db);
-    if (trip.status === 'active') {
-      const truckRef = doc(db, 'trucks', trip.truckId);
-      batch.update(truckRef, { status: 'Available' });
-      const driverRef = doc(db, 'drivers', trip.driverId);
-      batch.update(driverRef, { status: 'Available' });
-      if (trip.secondDriverId) {
-        const secondDriverRef = doc(db, 'drivers', trip.secondDriverId);
-        batch.update(secondDriverRef, { status: 'Available' });
-      }
-    }
-    const tripRef = doc(db, 'trips', trip.id);
-    batch.delete(tripRef);
-    withTimeout(batch.commit(), 10000, `Deleting Trip ${trip.id}`).catch(error => 
-      handleFirestoreError(error, OperationType.DELETE, `trips/${trip.id}`)
-    );
+    const assignmentRef = doc(db, 'monthly_assignments', assignmentId);
+    batch.delete(assignmentRef);
+
+    const truckRef = doc(db, 'trucks', truckId);
+    batch.update(truckRef, { status: 'Available' });
+
+    await withTimeout(batch.commit(), 10000, `Remove Monthly Assignment ${assignmentId}`);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `trips/${trip.id}`);
+    handleFirestoreError(error, OperationType.DELETE, `monthly_assignments/${assignmentId}`);
   }
 }

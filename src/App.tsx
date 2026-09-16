@@ -35,13 +35,16 @@ import {
   MoreVertical
 } from 'lucide-react';
 
-import { Truck, Driver, Trip, CustomFirebaseConfig, AppUser } from './types';
+import { Truck, Driver, Trip, CustomFirebaseConfig, AppUser, MonthlyAssignment } from './types';
 import {
   subscribeTrucks,
   subscribeDrivers,
   subscribeTrips,
+  subscribeMonthlyAssignments,
   assignTrip,
   completeTrip,
+  assignTruckMonthly,
+  removeMonthlyAssignment,
   checkAndSeedFirebaseIfEmpty,
   addNewTruck,
   addNewDriver,
@@ -138,6 +141,9 @@ export default function App() {
   const [trucks, setTrucks] = useState<Truck[]>(() => getLocalStorageData().trucks);
   const [drivers, setDrivers] = useState<Driver[]>(() => getLocalStorageData().drivers);
   const [trips, setTrips] = useState<Trip[]>(() => getLocalStorageData().trips);
+  const [monthlyAssignments, setMonthlyAssignments] = useState<MonthlyAssignment[]>([]);
+  const [isMonthlyModalOpen, setIsMonthlyModalOpen] = useState(false);
+  const [truckForMonthly, setTruckForMonthly] = useState<Truck | null>(null);
   
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
@@ -249,10 +255,22 @@ export default function App() {
       }
     );
 
+    // Subscribe to Monthly Assignments
+    const unsubscribeMonthly = subscribeMonthlyAssignments(
+      configToUse,
+      (updatedMonthly) => {
+        setMonthlyAssignments(updatedMonthly);
+      },
+      (err) => {
+        console.warn("Monthly assignments subscription update notice:", err.message);
+      }
+    );
+
     return () => {
       unsubscribeTrucks();
       unsubscribeDrivers();
       unsubscribeTrips();
+      unsubscribeMonthly();
     };
   }, [firebaseConfig, localFallbackActive]);
 
@@ -339,6 +357,37 @@ export default function App() {
     setSelectedTruck(null);
     setSelectedDriver(null);
     setSelectedSecondDriver(null);
+  };
+
+  const handleConfirmMonthlyAssignment = async (data: { companyName: string; startDate: string; monthlyRate: string; notes: string }) => {
+    if (!isAdmin || !truckForMonthly) {
+      throw new Error('Access denied');
+    }
+    await assignTruckMonthly(
+      configToUse,
+      {
+        truckId: truckForMonthly.id,
+        truckName: truckForMonthly.name,
+        companyName: data.companyName,
+        startDate: data.startDate,
+        monthlyRate: data.monthlyRate,
+        notes: data.notes
+      },
+      currentUser
+    );
+    setTruckForMonthly(null);
+  };
+
+  const handleRemoveMonthly = async (assignment: MonthlyAssignment) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`Are you sure you want to end monthly service for Rig ${assignment.truckId} with ${assignment.companyName}? The truck will return to Available.`)) {
+      return;
+    }
+    try {
+      await removeMonthlyAssignment(configToUse, assignment.id, assignment.truckId, currentUser);
+    } catch (err) {
+      alert(`Could not remove monthly assignment: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   // Complete route

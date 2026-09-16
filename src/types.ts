@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type TruckStatus = 'Available' | 'On the way' | 'Maintenance';
+export type TruckStatus = 'Available' | 'On the way' | 'Maintenance' | 'Monthly';
 export type DriverStatus = 'Available' | 'On the way' | 'Medical Leave' | 'Off Duty';
 export type TripStatus = 'active' | 'completed';
 export type UserRole = 'admin' | 'viewer';
@@ -14,6 +14,16 @@ export interface AppUser {
   displayName?: string;
   role: UserRole;
   createdAt?: string;
+}
+
+export interface MonthlyAssignment {
+  id: string;
+  truckId: string;
+  truckName: string;
+  companyName: string;
+  startDate: string;
+  monthlyRate?: string;
+  notes?: string;
 }
 
 export interface Truck {
