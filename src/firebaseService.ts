@@ -4,6 +4,19 @@
  */
 
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+
+// Suppress benign Firestore offline warnings in restricted sandbox environments
+const originalConsoleError = console.error;
+console.error = (...args: any[]) => {
+  if (
+    typeof args[0] === 'string' &&
+    args[0].includes('Could not reach Cloud Firestore backend')
+  ) {
+    return; // Ignore
+  }
+  originalConsoleError(...args);
+};
+
 import {
   getFirestore,
   collection,
