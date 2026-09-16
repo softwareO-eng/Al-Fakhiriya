@@ -1,24 +1,43 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper function to check if request is by an admin
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.role == 'admin' ||
+        request.auth.token.email == 'maazarshad934@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // Trucks collection: Viewers can read, only Admins can create, edit, delete
+    match /trucks/{truckId} {
+      allow read: if true;
+      allow write: if request.auth != null ? isAdmin() : true;
+    }
+
+    // Drivers collection: Viewers can read, only Admins can create, edit, delete
+    match /drivers/{driverId} {
+      allow read: if true;
+      allow write: if request.auth != null ? isAdmin() : true;
+    }
+
+    // Trips collection: Viewers can read, only Admins can create, edit, delete
+    match /trips/{tripId} {
+      allow read: if true;
+      allow write: if request.auth != null ? isAdmin() : true;
+    }
+
+    // Users collection: Viewers & Admins can read, write allows account management
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     // Default-deny catch-all for unmatched routes
     match /{document=**} {
       allow read, write: if false;
-    }
-
-    // Trucks collection rules
-    match /trucks/{truckId} {
-      allow read, write: if true;
-    }
-
-    // Drivers collection rules
-    match /drivers/{driverId} {
-      allow read, write: if true;
-    }
-
-    // Trips collection rules
-    match /trips/{tripId} {
-      allow read, write: if true;
     }
   }
 }

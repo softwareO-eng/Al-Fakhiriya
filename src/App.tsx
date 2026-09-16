@@ -27,10 +27,15 @@ import {
   Users,
   UserPlus,
   Table as TableIcon,
-  LayoutList
+  LayoutList,
+  Shield,
+  Eye,
+  LogOut,
+  Lock,
+  MoreVertical
 } from 'lucide-react';
 
-import { Truck, Driver, Trip, CustomFirebaseConfig } from './types';
+import { Truck, Driver, Trip, CustomFirebaseConfig, AppUser } from './types';
 import {
   subscribeTrucks,
   subscribeDrivers,
@@ -46,7 +51,10 @@ import {
   deleteTrip,
   getLocalStorageData,
   updateTruckStatus,
-  updateDriverStatus
+  updateDriverStatus,
+  getCurrentUser,
+  setCurrentUser as persistCurrentUser,
+  logoutUser
 } from './firebaseService';
 
 import FirebaseConfigModal from './components/FirebaseConfigModal';
@@ -58,6 +66,8 @@ import KeyDiagnosticsModal from './components/KeyDiagnosticsModal';
 import AlFakhriLogo from './components/AlFakhriLogo';
 import KftLogo from './components/KftLogo';
 import ExcelReportModal from './components/ExcelReportModal';
+import LoginModal from './components/LoginModal';
+import UserManagementModal from './components/UserManagementModal';
 import predefinedFirebaseConfig from '../firebase-applet-config.json';
 
 // Memory fallback for localStorage variables to prevent SecurityError crashes inside iframe environments
@@ -139,6 +149,14 @@ export default function App() {
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
+
+  // User Authentication & Role State
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => getCurrentUser());
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
+
+  const isAdmin = currentUser?.role === 'admin';
+  const isViewer = !isAdmin;
 
   // Filters for Available Trucks
   const [truckTypeFilter, setTruckTypeFilter] = useState<'All' | 'Flat Bed' | 'Low Bed'>('All');
@@ -238,12 +256,27 @@ export default function App() {
     };
   }, [firebaseConfig, localFallbackActive]);
 
-  // If both are selected, open assignment modal automatically
+  // If both are selected, open assignment modal automatically (Admin only)
   useEffect(() => {
     if (selectedTruck && selectedDriver) {
-      setIsAssignOpen(true);
+      if (isAdmin) {
+        setIsAssignOpen(true);
+      }
     }
-  }, [selectedTruck, selectedDriver]);
+  }, [selectedTruck, selectedDriver, isAdmin]);
+
+  // Auth state handlers
+  const handleLoginSuccess = (user: AppUser) => {
+    setCurrentUser(user);
+    persistCurrentUser(user);
+    setIsLoginOpen(false);
+  };
+
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+    setIsLoginOpen(true);
+  };
 
   // Config saver
   const handleSaveConfig = (newConfig: CustomFirebaseConfig | null) => {
@@ -262,6 +295,7 @@ export default function App() {
 
   // Driver selection toggle with support for primary & second driver
   const handleDriverSelect = (driver: Driver) => {
+    if (!isAdmin) return;
     if (selectedDriver?.id === driver.id) {
       // Deselect primary driver; promote second driver if present
       setSelectedDriver(selectedSecondDriver);
@@ -284,9 +318,13 @@ export default function App() {
   // Assign route
   const handleConfirmAssignment = async (from: string, to: string, secondDriver?: Driver | null) => {
     if (!selectedTruck || !selectedDriver) return;
+    if (!isAdmin) {
+      alert('Access Denied: Only Admins can assign and dispatch trips.');
+      return;
+    }
     try {
       const coDriver = secondDriver !== undefined ? secondDriver : selectedSecondDriver;
-      await assignTrip(configToUse, selectedDriver, selectedTruck, from, to, coDriver);
+      await assignTrip(configToUse, selectedDriver, selectedTruck, from, to, coDriver, currentUser);
       setIsAssignOpen(false);
       setSelectedTruck(null);
       setSelectedDriver(null);
@@ -305,8 +343,12 @@ export default function App() {
 
   // Complete route
   const handleCompleteTrip = async (trip: Trip) => {
+    if (!isAdmin) {
+      alert('Access Denied: Only Admins can complete routes.');
+      return;
+    }
     try {
-      await completeTrip(configToUse, trip);
+      await completeTrip(configToUse, trip, currentUser);
     } catch (err) {
       alert(`Could not complete route: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -314,21 +356,28 @@ export default function App() {
 
   // Add asset triggers
   const handleAddTruck = async (truckOn: Truck) => {
+    if (!isAdmin) {
+      throw new Error('Access Denied: Only Admins can add trucks.');
+    }
     if (trucks.some(t => t.id.trim().toUpperCase() === truckOn.id.trim().toUpperCase())) {
       throw new Error(`A truck with ID "${truckOn.id}" is already registered in the dispatch board.`);
     }
-    await addNewTruck(configToUse, truckOn);
+    await addNewTruck(configToUse, truckOn, currentUser);
   };
 
   const handleAddDriver = async (driverOn: Driver) => {
+    if (!isAdmin) {
+      throw new Error('Access Denied: Only Admins can add pilots.');
+    }
     if (drivers.some(d => d.id.trim().toUpperCase() === driverOn.id.trim().toUpperCase())) {
       throw new Error(`A pilot with ID "${driverOn.id}" is already registered in the dispatch board.`);
     }
-    await addNewDriver(configToUse, driverOn);
+    await addNewDriver(configToUse, driverOn, currentUser);
   };
 
   const handleDeleteTruck = async (truckId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAdmin) return;
     if (!window.confirm(`Are you sure you want to remove Rig ${truckId} from the fleet registry?`)) {
       return;
     }
@@ -336,7 +385,7 @@ export default function App() {
       if (selectedTruck?.id === truckId) {
         setSelectedTruck(null);
       }
-      await deleteTruck(configToUse, truckId);
+      await deleteTruck(configToUse, truckId, currentUser);
     } catch (err) {
       alert(`Could not delete truck: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -344,6 +393,7 @@ export default function App() {
 
   const handleDeleteDriver = async (driverId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAdmin) return;
     if (!window.confirm(`Are you sure you want to remove Pilot ${driverId} from the dispatch roster?`)) {
       return;
     }
@@ -351,29 +401,31 @@ export default function App() {
       if (selectedDriver?.id === driverId) {
         setSelectedDriver(null);
       }
-      await deleteDriver(configToUse, driverId);
+      await deleteDriver(configToUse, driverId, currentUser);
     } catch (err) {
       alert(`Could not delete driver: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const handleSetTruckStatus = async (truckId: string, status: 'Available' | 'Maintenance') => {
+    if (!isAdmin) return;
     try {
       if (selectedTruck?.id === truckId) {
         setSelectedTruck(null);
       }
-      await updateTruckStatus(configToUse, truckId, status);
+      await updateTruckStatus(configToUse, truckId, status, currentUser);
     } catch (err) {
       alert(`Could not update truck status: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
   const handleSetDriverStatus = async (driverId: string, status: 'Available' | 'Medical Leave' | 'Off Duty') => {
+    if (!isAdmin) return;
     try {
       if (selectedDriver?.id === driverId) {
         setSelectedDriver(null);
       }
-      await updateDriverStatus(configToUse, driverId, status);
+      await updateDriverStatus(configToUse, driverId, status, currentUser);
     } catch (err) {
       alert(`Could not update driver status: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -381,13 +433,14 @@ export default function App() {
 
   const handleDeleteTrip = (trip: Trip, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isAdmin) return;
     setTripToDelete(trip);
   };
 
   const handleConfirmDeleteTrip = async () => {
-    if (!tripToDelete) return;
+    if (!tripToDelete || !isAdmin) return;
     try {
-      await deleteTrip(configToUse, tripToDelete);
+      await deleteTrip(configToUse, tripToDelete, currentUser);
       setTripToDelete(null);
     } catch (err) {
       alert(`Could not delete trip: ${err instanceof Error ? err.message : String(err)}`);
@@ -573,21 +626,95 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
       
       {/* Main Navbar */}
       <nav id="main-navigation" className="bg-white border-b border-slate-200 py-3 px-4 shadow-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setIsLoginOpen(true)}
+              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              title="Admin Sign In"
+              aria-label="Admin Sign In"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
             <AlFakhriLogo />
           </div>
 
-          <div className="flex items-center space-x-3.5">
-            {/* Asset Add Dialog Trigger */}
-            <button
-              id="add-custom-resource-trigger"
-              onClick={() => setIsAddAssetOpen(true)}
-              className="inline-flex items-center space-x-1.5 bg-[#0e5697] hover:bg-[#0b4880] text-white px-4 py-2.5 text-xs font-semibold rounded-xl transition-transform active:scale-98 shadow-sm"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Add asset</span>
-            </button>
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
+            {/* User Account & Role Indicator */}
+            {currentUser ? (
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-2.5 py-1.5">
+                {isAdmin ? (
+                  <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-[11px] font-bold px-2 py-0.5 rounded-md font-mono">
+                    <Shield className="w-3.5 h-3.5 text-indigo-700" />
+                    <span>Admin</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-md font-mono">
+                    <Eye className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Viewer</span>
+                  </span>
+                )}
+
+                <span className="text-xs font-semibold text-slate-800 hidden sm:inline max-w-[130px] truncate" title={currentUser.displayName || currentUser.username}>
+                  {currentUser.displayName || currentUser.username}
+                </span>
+
+                {/* Admin-only User Management */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsUserManagementOpen(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 hover:text-indigo-600 px-2 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+                    title="Manage Users & Roles"
+                  >
+                    <Users className="w-3.5 h-3.5 text-slate-500" />
+                    <span className="hidden md:inline">Users</span>
+                  </button>
+                )}
+
+                {/* Switch Account Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsLoginOpen(true)}
+                  className="text-[11px] font-medium text-slate-500 hover:text-slate-800 px-1.5 py-1 rounded transition-colors cursor-pointer"
+                  title="Switch User / Login"
+                >
+                  Switch
+                </button>
+
+                {/* Sign Out Button */}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
+                  title="Sign out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsLoginOpen(true)}
+                className="inline-flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
+
+            {/* Asset Add Dialog Trigger - Admin Only */}
+            {isAdmin && (
+              <button
+                id="add-custom-resource-trigger"
+                onClick={() => setIsAddAssetOpen(true)}
+                className="inline-flex items-center space-x-1.5 bg-[#0e5697] hover:bg-[#0b4880] text-white px-4 py-2.5 text-xs font-semibold rounded-xl transition-transform active:scale-98 shadow-sm cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add asset</span>
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -699,7 +826,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
               >
                 Clear Selection
               </button>
-              {selectedTruck && !selectedDriver && selectedTruck.status === 'Available' && (
+              {isAdmin && selectedTruck && !selectedDriver && selectedTruck.status === 'Available' && (
                 <button
                   onClick={() => handleSetTruckStatus(selectedTruck.id, 'Maintenance')}
                   className="bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-xl text-xs font-semibold text-slate-950 shadow-sm transition-all cursor-pointer"
@@ -707,7 +834,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                   🛠️ Send to Maintenance
                 </button>
               )}
-              {selectedDriver && !selectedTruck && selectedDriver.status === 'Available' && (
+              {isAdmin && selectedDriver && !selectedTruck && selectedDriver.status === 'Available' && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleSetDriverStatus(selectedDriver.id, 'Medical Leave')}
@@ -723,7 +850,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                   </button>
                 </div>
               )}
-              {selectedTruck && selectedDriver && (
+              {isAdmin && selectedTruck && selectedDriver && (
                 <button
                   id="open-assignment-direct"
                   onClick={() => setIsAssignOpen(true)}
@@ -734,6 +861,12 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                     {selectedSecondDriver ? 'Dispatch Rig (2 Pilots)' : 'Dispatch Rig (1 Pilot)'}
                   </span>
                 </button>
+              )}
+              {isViewer && (
+                <div className="inline-flex items-center gap-1.5 bg-slate-800 border border-slate-700 text-slate-300 text-xs px-3 py-2 rounded-xl font-mono">
+                  <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Viewer Mode (Read-only)</span>
+                </div>
               )}
             </div>
           </div>
@@ -782,8 +915,11 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                           <div
                             key={truck.id}
                             id={`truck-card-${truck.id}`}
-                            onClick={() => setSelectedTruck(isSelected ? null : truck)}
-                            className={`p-1 rounded border cursor-pointer select-none transition-all ${
+                            onClick={() => {
+                              if (!isAdmin) return;
+                              setSelectedTruck(isSelected ? null : truck);
+                            }}
+                            className={`p-1 rounded border ${isAdmin ? 'cursor-pointer' : 'cursor-default'} select-none transition-all ${
                               isSelected
                                 ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
                                 : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm'
@@ -794,7 +930,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                                 <div className="font-mono font-bold text-slate-900 text-[9px] truncate">{truck.id}</div>
                                 {isSelected ? (
                                   <CheckCircle className="w-3 h-3 text-indigo-600 shrink-0" />
-                                ) : (
+                                ) : isAdmin ? (
                                   <button
                                     type="button"
                                     title="Delete Truck"
@@ -803,7 +939,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                                   >
                                     <Trash2 className="w-2.5 h-2.5" />
                                   </button>
-                                )}
+                                ) : null}
                               </div>
                               <div className="mt-0.5 flex justify-between items-end">
                                 <div className="font-mono text-[8px] text-slate-500 truncate">{truck.licensePlate || 'No Plt'}</div>
@@ -839,8 +975,11 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                           <div
                             key={truck.id}
                             id={`truck-card-${truck.id}`}
-                            onClick={() => setSelectedTruck(isSelected ? null : truck)}
-                            className={`p-1 rounded border cursor-pointer select-none transition-all ${
+                            onClick={() => {
+                              if (!isAdmin) return;
+                              setSelectedTruck(isSelected ? null : truck);
+                            }}
+                            className={`p-1 rounded border ${isAdmin ? 'cursor-pointer' : 'cursor-default'} select-none transition-all ${
                               isSelected
                                 ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
                                 : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50 shadow-sm'
@@ -851,7 +990,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                                 <div className="font-mono font-bold text-slate-900 text-[9px] truncate">{truck.id}</div>
                                 {isSelected ? (
                                   <CheckCircle className="w-3 h-3 text-indigo-600 shrink-0" />
-                                ) : (
+                                ) : isAdmin ? (
                                   <button
                                     type="button"
                                     title="Delete Truck"
@@ -860,7 +999,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                                   >
                                     <Trash2 className="w-2.5 h-2.5" />
                                   </button>
-                                )}
+                                ) : null}
                               </div>
                               <div className="mt-0.5 flex justify-between items-end">
                                 <div className="font-mono text-[8px] text-slate-500 truncate">{truck.licensePlate || 'No Plt'}</div>
@@ -952,7 +1091,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                               <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded font-mono">
                                 2. Co-Pilot
                               </span>
-                            ) : (
+                            ) : isAdmin ? (
                               <button
                                 type="button"
                                 title="Delete Driver"
@@ -961,7 +1100,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -1003,12 +1142,18 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                               <div className="text-[10px] text-slate-500 truncate">{truck.name}</div>
                               <div className="text-[9px] text-amber-700 font-medium font-mono mt-1">Status: Maintenance</div>
                             </div>
-                            <button
-                              onClick={() => handleSetTruckStatus(truck.id, 'Available')}
-                              className="w-full text-center bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border border-amber-200 font-semibold py-1 rounded-lg text-[10px] transition-colors cursor-pointer"
-                            >
-                              🛠️ Make Ready
-                            </button>
+                            {isAdmin ? (
+                              <button
+                                onClick={() => handleSetTruckStatus(truck.id, 'Available')}
+                                className="w-full text-center bg-white hover:bg-amber-50 text-amber-700 hover:text-amber-800 border border-amber-200 font-semibold py-1 rounded-lg text-[10px] transition-colors cursor-pointer"
+                              >
+                                🛠️ Make Ready
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-amber-700/80 font-mono text-center block pt-0.5">
+                                Pending Clearance
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1033,12 +1178,18 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                                 )}
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleSetDriverStatus(driver.id, 'Available')}
-                              className="w-full text-center bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-rose-200 font-semibold py-1 rounded-lg text-[10px] transition-colors cursor-pointer"
-                            >
-                              🩺 Return to Duty
-                            </button>
+                            {isAdmin ? (
+                              <button
+                                onClick={() => handleSetDriverStatus(driver.id, 'Available')}
+                                className="w-full text-center bg-white hover:bg-rose-50 text-rose-700 hover:text-rose-800 border border-rose-200 font-semibold py-1 rounded-lg text-[10px] transition-colors cursor-pointer"
+                              >
+                                🩺 Return to Duty
+                              </button>
+                            ) : (
+                              <span className="text-[10px] text-rose-700/80 font-mono text-center block pt-0.5">
+                                On Leave
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1156,22 +1307,31 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
 
                       {/* Right: Actions */}
                       <div className="flex items-center gap-2 border-t md:border-t-0 border-slate-100 pt-3.5 md:pt-0 shrink-0">
-                        <button
-                          id={`complete-trip-button-${trip.id}`}
-                          onClick={() => handleCompleteTrip(trip)}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:shadow-xs transition-colors flex items-center space-x-1.5 active:scale-98"
-                        >
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          <span>Arrived / Complete Route</span>
-                        </button>
-                        <button
-                          id={`delete-trip-button-${trip.id}`}
-                          title="Cancel & Abort Dispatch"
-                          onClick={(e) => handleDeleteTrip(trip, e)}
-                          className="p-2.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-100 rounded-xl transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {isAdmin ? (
+                          <>
+                            <button
+                              id={`complete-trip-button-${trip.id}`}
+                              onClick={() => handleCompleteTrip(trip)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl hover:shadow-xs transition-colors flex items-center space-x-1.5 active:scale-98 cursor-pointer"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              <span>Arrived / Complete Route</span>
+                            </button>
+                            <button
+                              id={`delete-trip-button-${trip.id}`}
+                              title="Cancel & Abort Dispatch"
+                              onClick={(e) => handleDeleteTrip(trip, e)}
+                              className="p-2.5 bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-100 rounded-xl transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs px-3 py-1.5 rounded-xl font-medium">
+                            <Clock className="w-3.5 h-3.5 text-amber-600" />
+                            <span>In Transit</span>
+                          </div>
+                        )}
                       </div>
 
                     </div>
@@ -1219,16 +1379,18 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                     </button>
                   </div>
 
-                  {/* Excel Report Export Trigger */}
-                  <button
-                    type="button"
-                    id="history-export-excel-button"
-                    onClick={() => setIsExcelModalOpen(true)}
-                    className="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
-                  >
-                    <FileSpreadsheet className="h-3.5 w-3.5" />
-                    <span>Export Excel</span>
-                  </button>
+                  {/* Excel Report Export Trigger - Admin Only */}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      id="history-export-excel-button"
+                      onClick={() => setIsExcelModalOpen(true)}
+                      className="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                    >
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                      <span>Export Excel</span>
+                    </button>
+                  )}
 
                   {/* Timeframe Filter Buttons */}
                   <div className="flex bg-slate-100 p-0.5 rounded-lg shrink-0">
@@ -1280,7 +1442,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                         <th className="py-2.5 px-3 font-semibold">Co-Pilot</th>
                         <th className="py-2.5 px-3 font-semibold">Origin ➔ Destination</th>
                         <th className="py-2.5 px-3 font-semibold text-center">Status</th>
-                        <th className="py-2.5 px-3 font-semibold text-right">Action</th>
+                        {isAdmin && <th className="py-2.5 px-3 font-semibold text-right">Action</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -1322,17 +1484,19 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                               Delivered
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              id={`delete-table-log-button-${log.id}`}
-                              title="Delete Historical Log"
-                              onClick={(e) => handleDeleteTrip(log, e)}
-                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
+                          {isAdmin && (
+                            <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                              <button
+                                type="button"
+                                id={`delete-table-log-button-${log.id}`}
+                                title="Delete Historical Log"
+                                onClick={(e) => handleDeleteTrip(log, e)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -1382,15 +1546,17 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                               <div className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
                                 ✓ Complete
                               </div>
-                              <button
-                                type="button"
-                                id={`delete-log-button-${log.id}`}
-                                title="Delete Historical Log"
-                                onClick={(e) => handleDeleteTrip(log, e)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  id={`delete-log-button-${log.id}`}
+                                  title="Delete Historical Log"
+                                  onClick={(e) => handleDeleteTrip(log, e)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1415,8 +1581,8 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
         onSave={handleSaveConfig}
       />
 
-      {/* Trigger Assignment Dialog popup */}
-      {selectedTruck && selectedDriver && (
+      {/* Trigger Assignment Dialog popup - Admin Only */}
+      {isAdmin && selectedTruck && selectedDriver && (
         <TripAssignmentModal
           isOpen={isAssignOpen}
           driver={selectedDriver}
@@ -1436,13 +1602,15 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
         trucks={trucks}
       />
 
-      {/* Add New Driver / Truck Dialog */}
-      <AddAssetModal
-        isOpen={isAddAssetOpen}
-        onClose={() => setIsAddAssetOpen(false)}
-        onAddTruck={handleAddTruck}
-        onAddDriver={handleAddDriver}
-      />
+      {/* Add New Driver / Truck Dialog - Admin Only */}
+      {isAdmin && (
+        <AddAssetModal
+          isOpen={isAddAssetOpen}
+          onClose={() => setIsAddAssetOpen(false)}
+          onAddTruck={handleAddTruck}
+          onAddDriver={handleAddDriver}
+        />
+      )}
 
       {/* Diagnostics Modal */}
       <KeyDiagnosticsModal 
@@ -1450,6 +1618,24 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
         onClose={() => setIsDiagnosticsOpen(false)} 
         firebaseConfigExists={isValidConfig(firebaseConfig)} 
       />
+
+      {/* Authentication Modal */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
+        currentUser={currentUser}
+      />
+
+      {/* User Role Management Modal (Admin Only) */}
+      {isAdmin && (
+        <UserManagementModal
+          isOpen={isUserManagementOpen}
+          onClose={() => setIsUserManagementOpen(false)}
+          currentUser={currentUser}
+          firebaseConfig={firebaseConfig}
+        />
+      )}
 
       <ConfirmModal
         isOpen={!!tripToDelete}

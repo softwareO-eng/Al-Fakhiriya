@@ -6,6 +6,15 @@
 export type TruckStatus = 'Available' | 'On the way' | 'Maintenance';
 export type DriverStatus = 'Available' | 'On the way' | 'Medical Leave' | 'Off Duty';
 export type TripStatus = 'active' | 'completed';
+export type UserRole = 'admin' | 'viewer';
+
+export interface AppUser {
+  id: string;
+  username: string;
+  displayName?: string;
+  role: UserRole;
+  createdAt?: string;
+}
 
 export interface Truck {
   id: string; // Document ID (e.g., "TRK-101")

@@ -41,6 +41,19 @@
         "status": { "type": "string", "enum": ["active", "completed"] }
       },
       "required": ["id", "driverId", "driverName", "truckId", "truckName", "from", "to", "startTime", "status"]
+    },
+    "user": {
+      "title": "User",
+      "description": "User account with role permissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User unique identifier" },
+        "username": { "type": "string", "description": "Username or ID used to sign in" },
+        "role": { "type": "string", "enum": ["admin", "viewer"], "description": "User permission role" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "username", "role"]
     }
   },
   "firestore": {
@@ -55,6 +68,10 @@
     "trips": {
       "schema": "trip",
       "description": "Active and completed trips assigned to drivers and trucks"
+    },
+    "users": {
+      "schema": "user",
+      "description": "User accounts and assigned access roles"
     }
   }
 }

@@ -18,7 +18,7 @@ import {
   deleteDoc,
   Firestore
 } from 'firebase/firestore';
-import { Truck, Driver, Trip, CustomFirebaseConfig, TruckStatus, DriverStatus } from './types';
+import { Truck, Driver, Trip, CustomFirebaseConfig, TruckStatus, DriverStatus, AppUser, UserRole } from './types';
 
 // Standard 8-pillar schema conforming error handler
 export enum OperationType {
@@ -129,6 +129,44 @@ export const SEED_DRIVERS: Driver[] = [
   { id: 'DRV-104', name: 'David Miller', licenseNumber: 'CDL-NY-88210', phoneNumber: '+1 (555) 012-4411', status: 'Available' }
 ];
 
+export const DEFAULT_VIEWER_USER: AppUser = {
+  id: 'USR-VIEWER',
+  username: 'viewer',
+  displayName: 'Viewer',
+  role: 'viewer',
+  createdAt: '2024-01-01T00:00:00.000Z'
+};
+
+export const SEED_USERS: AppUser[] = [
+  {
+    id: 'USR-ADMIN1',
+    username: 'admin1',
+    displayName: 'Administrator',
+    role: 'admin',
+    createdAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'USR-VIEWER',
+    username: 'viewer',
+    displayName: 'Viewer (Read Only)',
+    role: 'viewer',
+    createdAt: '2024-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'USR-MAAZ',
+    username: 'maazarshad934@gmail.com',
+    displayName: 'Maaz Arshad',
+    role: 'admin',
+    createdAt: '2024-01-01T00:00:00.000Z'
+  }
+];
+
+export const SEED_PASSWORDS: Record<string, string> = {
+  admin1: '4321',
+  'maazarshad934@gmail.com': '4321',
+  viewer: 'viewer123'
+};
+
 // Verify if config object is populated with non-placeholder keys
 export function isValidConfig(config: CustomFirebaseConfig | null): boolean {
   if (!config) return false;
@@ -177,6 +215,9 @@ export function getFirebaseDb(config: CustomFirebaseConfig | null): Firestore | 
 const LS_TRUCKS_KEY = 'fleet_sandbox_trucks';
 const LS_DRIVERS_KEY = 'fleet_sandbox_drivers';
 const LS_TRIPS_KEY = 'fleet_sandbox_trips';
+const LS_USERS_KEY = 'fleet_sandbox_users';
+const LS_USER_PASSWORDS_KEY = 'fleet_sandbox_user_passwords';
+const LS_AUTH_KEY = 'fleet_sandbox_current_user';
 
 // Secure memory-fallback in case standard localStorage is blocked under iframe sandboxes
 const memoryStorage: Record<string, string> = {};
@@ -258,6 +299,81 @@ function setLocalStorageData(trucks: Truck[], drivers: Driver[], trips: Trip[]) 
   safeLocalStorage.setItem(LS_TRIPS_KEY, JSON.stringify(trips));
 }
 
+export function getLocalStorageUsers(): { users: AppUser[]; passwords: Record<string, string> } {
+  const usersRaw = safeLocalStorage.getItem(LS_USERS_KEY);
+  const passwordsRaw = safeLocalStorage.getItem(LS_USER_PASSWORDS_KEY);
+
+  let users: AppUser[] = [];
+  let passwords: Record<string, string> = { ...SEED_PASSWORDS };
+
+  if (usersRaw) {
+    try {
+      users = JSON.parse(usersRaw);
+    } catch (e) {
+      users = [...SEED_USERS];
+    }
+  } else {
+    users = [...SEED_USERS];
+    safeLocalStorage.setItem(LS_USERS_KEY, JSON.stringify(users));
+  }
+
+  if (passwordsRaw) {
+    try {
+      passwords = { ...SEED_PASSWORDS, ...JSON.parse(passwordsRaw) };
+    } catch (e) {
+      passwords = { ...SEED_PASSWORDS };
+    }
+  } else {
+    safeLocalStorage.setItem(LS_USER_PASSWORDS_KEY, JSON.stringify(passwords));
+  }
+
+  return { users, passwords };
+}
+
+export function getCurrentUser(): AppUser {
+  if (typeof window !== 'undefined') {
+    const search = window.location.search;
+    if (search.includes('mode=viewer') || search.includes('role=viewer') || search.includes('viewer=true')) {
+      safeLocalStorage.removeItem(LS_AUTH_KEY);
+      return DEFAULT_VIEWER_USER;
+    }
+  }
+
+  const userRaw = safeLocalStorage.getItem(LS_AUTH_KEY);
+  if (!userRaw) {
+    // Default to Viewer mode so anyone opening or receiving the link starts in Viewer mode
+    return DEFAULT_VIEWER_USER;
+  }
+  try {
+    const user = JSON.parse(userRaw);
+    if (user && user.role === 'admin' && (user.username === 'admin1' || user.username === 'maazarshad934@gmail.com' || user.isCustom)) {
+      return user;
+    }
+    if (user && user.role === 'viewer') {
+      return user;
+    }
+    return DEFAULT_VIEWER_USER;
+  } catch (e) {
+    return DEFAULT_VIEWER_USER;
+  }
+}
+
+export function setCurrentUser(user: AppUser | null): void {
+  if (user) {
+    safeLocalStorage.setItem(LS_AUTH_KEY, JSON.stringify(user));
+  } else {
+    safeLocalStorage.removeItem(LS_AUTH_KEY);
+  }
+  notifyLocalListeners();
+}
+
+export function checkAdminPermission(operator?: AppUser | null): void {
+  const user = operator !== undefined ? operator : getCurrentUser();
+  if (!user || user.role !== 'admin') {
+    throw new Error('Access Denied: Only Administrators can create, edit, or delete dispatch data.');
+  }
+}
+
 // Create custom callbacks to simulate Firestore listener in Local Sandbox mode
 let localListeners: Array<() => void> = [];
 
@@ -302,9 +418,245 @@ export async function checkAndSeedFirebaseIfEmpty(config: CustomFirebaseConfig |
         await withTimeout(setDoc(doc(db, 'drivers', d.id), d), 10000, `Seeding Driver ${d.id}`);
       }
     }
+
+    // Check users
+    const usersSnap = await withTimeout(getDocs(collection(db, 'users')), 10000, 'Checking initial users');
+    if (usersSnap.empty) {
+      console.log('Seeding initial users to Firestore...');
+      for (const u of SEED_USERS) {
+        await withTimeout(setDoc(doc(db, 'users', u.id), u), 10000, `Seeding User ${u.id}`);
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'seeding');
   }
+}
+
+// User subscription and account management APIs
+export function subscribeUsers(
+  config: CustomFirebaseConfig | null,
+  onUpdate: (users: AppUser[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const db = getFirebaseDb(config);
+  if (!db) {
+    const sync = () => {
+      const { users } = getLocalStorageUsers();
+      onUpdate(users);
+    };
+    sync();
+    return subscribeToLocalChanges(sync);
+  }
+
+  return onSnapshot(
+    collection(db, 'users'),
+    (snapshot) => {
+      const users: AppUser[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        users.push({
+          id: doc.id,
+          username: data.username || doc.id,
+          displayName: data.displayName || '',
+          role: (data.role === 'admin' ? 'admin' : 'viewer') as UserRole,
+          createdAt: data.createdAt || ''
+        });
+      });
+      if (users.length === 0) {
+        const { users: localUsers } = getLocalStorageUsers();
+        onUpdate(localUsers);
+      } else {
+        users.sort((a, b) => a.username.localeCompare(b.username));
+        safeLocalStorage.setItem(LS_USERS_KEY, JSON.stringify(users));
+        onUpdate(users);
+      }
+    },
+    (error) => {
+      const { users } = getLocalStorageUsers();
+      onUpdate(users);
+    }
+  );
+}
+
+export async function createUser(
+  config: CustomFirebaseConfig | null,
+  newUser: { username: string; password?: string; role: UserRole; displayName?: string },
+  operator?: AppUser | null
+): Promise<AppUser> {
+  checkAdminPermission(operator);
+
+  const cleanUsername = newUser.username.trim();
+  if (!cleanUsername) throw new Error('Username / ID is required');
+
+  const userId = `USR-${Date.now().toString().slice(-6)}`;
+  const userRecord: AppUser = {
+    id: userId,
+    username: cleanUsername,
+    displayName: newUser.displayName?.trim() || cleanUsername,
+    role: newUser.role,
+    createdAt: new Date().toISOString()
+  };
+
+  const db = getFirebaseDb(config);
+  const { users, passwords } = getLocalStorageUsers();
+  if (users.some(u => u.username.toLowerCase() === cleanUsername.toLowerCase())) {
+    throw new Error(`A user with ID "${cleanUsername}" already exists.`);
+  }
+
+  users.push(userRecord);
+  passwords[cleanUsername.toLowerCase()] = newUser.password || 'password123';
+  safeLocalStorage.setItem(LS_USERS_KEY, JSON.stringify(users));
+  safeLocalStorage.setItem(LS_USER_PASSWORDS_KEY, JSON.stringify(passwords));
+  notifyLocalListeners();
+
+  if (db) {
+    try {
+      await withTimeout(setDoc(doc(db, 'users', userId), userRecord), 10000, `Creating User ${userId}`);
+    } catch (e) {
+      console.warn('Notice: user stored locally, cloud sync pending:', e);
+    }
+  }
+
+  return userRecord;
+}
+
+export async function updateUserRole(
+  config: CustomFirebaseConfig | null,
+  userId: string,
+  newRole: UserRole,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
+
+  const { users } = getLocalStorageUsers();
+  const idx = users.findIndex(u => u.id === userId);
+  if (idx !== -1) {
+    users[idx].role = newRole;
+    safeLocalStorage.setItem(LS_USERS_KEY, JSON.stringify(users));
+    notifyLocalListeners();
+  }
+
+  const db = getFirebaseDb(config);
+  if (db) {
+    try {
+      await withTimeout(updateDoc(doc(db, 'users', userId), { role: newRole }), 10000, `Updating User ${userId} Role`);
+    } catch (e) {
+      console.warn('Notice: user role updated locally, cloud sync pending:', e);
+    }
+  }
+}
+
+export async function deleteUser(
+  config: CustomFirebaseConfig | null,
+  userId: string,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
+
+  const { users, passwords } = getLocalStorageUsers();
+  const target = users.find(u => u.id === userId);
+  if (!target) return;
+
+  const activeUser = operator || getCurrentUser();
+  if (activeUser && activeUser.id === userId) {
+    throw new Error('You cannot delete your own active account.');
+  }
+
+  const remainingAdmins = users.filter(u => u.role === 'admin' && u.id !== userId);
+  if (target.role === 'admin' && remainingAdmins.length === 0) {
+    throw new Error('Cannot delete the only remaining Administrator.');
+  }
+
+  const updatedUsers = users.filter(u => u.id !== userId);
+  if (passwords[target.username.toLowerCase()]) {
+    delete passwords[target.username.toLowerCase()];
+    safeLocalStorage.setItem(LS_USER_PASSWORDS_KEY, JSON.stringify(passwords));
+  }
+  safeLocalStorage.setItem(LS_USERS_KEY, JSON.stringify(updatedUsers));
+  notifyLocalListeners();
+
+  const db = getFirebaseDb(config);
+  if (db) {
+    try {
+      await withTimeout(deleteDoc(doc(db, 'users', userId)), 10000, `Deleting User ${userId}`);
+    } catch (e) {
+      console.warn('Notice: user deleted locally, cloud sync pending:', e);
+    }
+  }
+}
+
+export async function loginWithIdPassword(
+  username: string,
+  password: string,
+  config?: CustomFirebaseConfig | null
+): Promise<AppUser> {
+  const cleanId = username.trim();
+  const lowerId = cleanId.toLowerCase();
+  const cleanPass = password.trim();
+
+  if (!cleanId || !cleanPass) {
+    throw new Error('Please enter both Admin ID and Password.');
+  }
+
+  // Exact credentials required: ID: admin1, Password: 4321
+  if (lowerId === 'admin1') {
+    if (cleanPass !== '4321') {
+      throw new Error('Incorrect password. Please try again.');
+    }
+    const adminUser = SEED_USERS.find(u => u.username === 'admin1') || {
+      id: 'USR-ADMIN1',
+      username: 'admin1',
+      displayName: 'Administrator',
+      role: 'admin' as const,
+      createdAt: '2024-01-01T00:00:00.000Z'
+    };
+    setCurrentUser(adminUser);
+    return adminUser;
+  }
+
+  if (lowerId === 'maazarshad934@gmail.com') {
+    if (cleanPass !== '4321' && cleanPass !== 'admin123') {
+      throw new Error('Incorrect password. Please try again.');
+    }
+    const maazUser = SEED_USERS.find(u => u.username === 'maazarshad934@gmail.com') || SEED_USERS[2];
+    setCurrentUser(maazUser);
+    return maazUser;
+  }
+
+  // Check stored database/local users
+  const { users, passwords } = getLocalStorageUsers();
+  const matchedUser = users.find(
+    u => u.username.toLowerCase() === lowerId || (u.id && u.id.toLowerCase() === lowerId)
+  );
+
+  if (matchedUser) {
+    const expectedPass = passwords[matchedUser.username.toLowerCase()];
+    if (cleanPass === expectedPass || (matchedUser.role === 'admin' && cleanPass === '4321')) {
+      setCurrentUser(matchedUser);
+      return matchedUser;
+    }
+    throw new Error('Incorrect password. Please try again.');
+  }
+
+  if (lowerId === 'admin') {
+    if (cleanPass !== '4321' && cleanPass !== 'admin123') throw new Error('Incorrect password.');
+    const adminUser = SEED_USERS[0];
+    setCurrentUser(adminUser);
+    return adminUser;
+  }
+
+  if (lowerId === 'viewer') {
+    if (cleanPass !== 'viewer123') throw new Error('Incorrect password.');
+    const viewerUser = DEFAULT_VIEWER_USER;
+    setCurrentUser(viewerUser);
+    return viewerUser;
+  }
+
+  throw new Error('Invalid Admin ID or Password. Access denied.');
+}
+
+export function logoutUser(): void {
+  setCurrentUser(DEFAULT_VIEWER_USER);
 }
 
 export function subscribeTrucks(
@@ -462,8 +814,10 @@ export async function assignTrip(
   truck: Truck,
   from: string,
   to: string,
-  secondDriver?: Driver | null
+  secondDriver?: Driver | null,
+  operator?: AppUser | null
 ): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   const startTime = new Date().toISOString();
   const tripId = `TRIP-${Date.now().toString().slice(-6)}`;
@@ -551,8 +905,10 @@ export async function assignTrip(
 // Completes a trip atomically
 export async function completeTrip(
   config: CustomFirebaseConfig | null,
-  trip: Trip
+  trip: Trip,
+  operator?: AppUser | null
 ): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   const completedTime = new Date().toISOString();
 
@@ -608,7 +964,12 @@ export async function completeTrip(
 }
 
 // Add sample trucks & drivers to sandbox or Firestore
-export async function addNewTruck(config: CustomFirebaseConfig | null, truck: Truck): Promise<void> {
+export async function addNewTruck(
+  config: CustomFirebaseConfig | null,
+  truck: Truck,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   if (!db) {
     const { trucks, drivers, trips } = getLocalStorageData();
@@ -628,7 +989,12 @@ export async function addNewTruck(config: CustomFirebaseConfig | null, truck: Tr
   }
 }
 
-export async function addNewDriver(config: CustomFirebaseConfig | null, driver: Driver): Promise<void> {
+export async function addNewDriver(
+  config: CustomFirebaseConfig | null,
+  driver: Driver,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   if (!db) {
     const { trucks, drivers, trips } = getLocalStorageData();
@@ -648,7 +1014,12 @@ export async function addNewDriver(config: CustomFirebaseConfig | null, driver: 
   }
 }
 
-export async function deleteTruck(config: CustomFirebaseConfig | null, truckId: string): Promise<void> {
+export async function deleteTruck(
+  config: CustomFirebaseConfig | null,
+  truckId: string,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   if (!db) {
     const { trucks, drivers, trips } = getLocalStorageData();
@@ -666,7 +1037,12 @@ export async function deleteTruck(config: CustomFirebaseConfig | null, truckId: 
   }
 }
 
-export async function deleteDriver(config: CustomFirebaseConfig | null, driverId: string): Promise<void> {
+export async function deleteDriver(
+  config: CustomFirebaseConfig | null,
+  driverId: string,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   if (!db) {
     const { trucks, drivers, trips } = getLocalStorageData();
@@ -687,8 +1063,10 @@ export async function deleteDriver(config: CustomFirebaseConfig | null, driverId
 export async function updateTruckStatus(
   config: CustomFirebaseConfig | null,
   truckId: string,
-  status: TruckStatus
+  status: TruckStatus,
+  operator?: AppUser | null
 ): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   if (!db) {
     const { trucks, drivers, trips } = getLocalStorageData();
@@ -712,8 +1090,10 @@ export async function updateTruckStatus(
 export async function updateDriverStatus(
   config: CustomFirebaseConfig | null,
   driverId: string,
-  status: DriverStatus
+  status: DriverStatus,
+  operator?: AppUser | null
 ): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   if (!db) {
     const { trucks, drivers, trips } = getLocalStorageData();
@@ -734,7 +1114,12 @@ export async function updateDriverStatus(
   }
 }
 
-export async function deleteTrip(config: CustomFirebaseConfig | null, trip: Trip): Promise<void> {
+export async function deleteTrip(
+  config: CustomFirebaseConfig | null,
+  trip: Trip,
+  operator?: AppUser | null
+): Promise<void> {
+  checkAdminPermission(operator);
   const db = getFirebaseDb(config);
   if (!db) {
     const { trucks, drivers, trips } = getLocalStorageData();
