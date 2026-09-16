@@ -40,6 +40,8 @@ export interface Trip {
   startTime: string; // ISO String or Firestore formatted string for stability
   completedTime?: string; // ISO string when completed
   status: TripStatus;
+  secondDriverId?: string; // Optional 2nd driver for team driver operations
+  secondDriverName?: string;
 }
 
 export interface CustomFirebaseConfig {

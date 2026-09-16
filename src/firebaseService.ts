@@ -429,6 +429,8 @@ export function subscribeTrips(
           id: doc.id,
           driverId: data.driverId || '',
           driverName: data.driverName || '',
+          secondDriverId: data.secondDriverId || undefined,
+          secondDriverName: data.secondDriverName || undefined,
           truckId: data.truckId || '',
           truckName: data.truckName || '',
           from: data.from || '',
@@ -453,13 +455,14 @@ export function subscribeTrips(
   );
 }
 
-// Assigns a truck and driver to a trip cleanly inside a coordinated transaction or batch
+// Assigns a truck and driver (with optional second driver) to a trip cleanly inside a coordinated transaction or batch
 export async function assignTrip(
   config: CustomFirebaseConfig | null,
   driver: Driver,
   truck: Truck,
   from: string,
-  to: string
+  to: string,
+  secondDriver?: Driver | null
 ): Promise<void> {
   const db = getFirebaseDb(config);
   const startTime = new Date().toISOString();
@@ -470,15 +473,21 @@ export async function assignTrip(
     const { trucks, drivers, trips } = getLocalStorageData();
     const targetTruckIndex = trucks.findIndex(t => t.id === truck.id);
     const targetDriverIndex = drivers.findIndex(d => d.id === driver.id);
+    const targetSecondDriverIndex = secondDriver ? drivers.findIndex(d => d.id === secondDriver.id) : -1;
 
     if (targetTruckIndex !== -1 && targetDriverIndex !== -1) {
       trucks[targetTruckIndex].status = 'On the way';
       drivers[targetDriverIndex].status = 'On the way';
+      if (targetSecondDriverIndex !== -1) {
+        drivers[targetSecondDriverIndex].status = 'On the way';
+      }
 
       const newTrip: Trip = {
         id: tripId,
         driverId: driver.id,
         driverName: driver.name,
+        secondDriverId: secondDriver ? secondDriver.id : undefined,
+        secondDriverName: secondDriver ? secondDriver.name : undefined,
         truckId: truck.id,
         truckName: truck.name,
         from,
@@ -506,9 +515,15 @@ export async function assignTrip(
     const driverRef = doc(db, 'drivers', driver.id);
     batch.update(driverRef, { status: 'On the way' });
 
+    // Update second driver status if assigned
+    if (secondDriver) {
+      const secondDriverRef = doc(db, 'drivers', secondDriver.id);
+      batch.update(secondDriverRef, { status: 'On the way' });
+    }
+
     // Create new trip
     const tripRef = doc(db, 'trips', tripId);
-    batch.set(tripRef, {
+    const tripPayload: Record<string, any> = {
       id: tripId,
       driverId: driver.id,
       driverName: driver.name,
@@ -518,7 +533,12 @@ export async function assignTrip(
       to,
       startTime,
       status: 'active'
-    });
+    };
+    if (secondDriver) {
+      tripPayload.secondDriverId = secondDriver.id;
+      tripPayload.secondDriverName = secondDriver.name;
+    }
+    batch.set(tripRef, tripPayload);
 
     withTimeout(batch.commit(), 10000, 'Confirming Trip Dispatch').catch(error => 
       handleFirestoreError(error, OperationType.WRITE, 'trips_assignment')
@@ -541,10 +561,13 @@ export async function completeTrip(
     const { trucks, drivers, trips } = getLocalStorageData();
     const targetTruckIndex = trucks.findIndex(t => t.id === trip.truckId);
     const targetDriverIndex = drivers.findIndex(d => d.id === trip.driverId);
+    const targetSecondDriverIndex = trip.secondDriverId ? drivers.findIndex(d => d.id === trip.secondDriverId) : -1;
     const targetTripIndex = trips.findIndex(t => t.id === trip.id);
 
     if (targetTruckIndex !== -1) trucks[targetTruckIndex].status = 'Available';
     if (targetDriverIndex !== -1) drivers[targetDriverIndex].status = 'Available';
+    if (targetSecondDriverIndex !== -1) drivers[targetSecondDriverIndex].status = 'Available';
+
     if (targetTripIndex !== -1) {
       trips[targetTripIndex].status = 'completed';
       trips[targetTripIndex].completedTime = completedTime;
@@ -564,6 +587,11 @@ export async function completeTrip(
 
     const driverRef = doc(db, 'drivers', trip.driverId);
     batch.update(driverRef, { status: 'Available' });
+
+    if (trip.secondDriverId) {
+      const secondDriverRef = doc(db, 'drivers', trip.secondDriverId);
+      batch.update(secondDriverRef, { status: 'Available' });
+    }
 
     const tripRef = doc(db, 'trips', trip.id);
     batch.update(tripRef, {
@@ -715,6 +743,10 @@ export async function deleteTrip(config: CustomFirebaseConfig | null, trip: Trip
       if (truckIdx !== -1) trucks[truckIdx].status = 'Available';
       const driverIdx = drivers.findIndex(d => d.id === trip.driverId);
       if (driverIdx !== -1) drivers[driverIdx].status = 'Available';
+      if (trip.secondDriverId) {
+        const secondDriverIdx = drivers.findIndex(d => d.id === trip.secondDriverId);
+        if (secondDriverIdx !== -1) drivers[secondDriverIdx].status = 'Available';
+      }
     }
     const updatedTrips = trips.filter(t => t.id !== trip.id);
     setLocalStorageData(trucks, drivers, updatedTrips);
@@ -728,6 +760,10 @@ export async function deleteTrip(config: CustomFirebaseConfig | null, trip: Trip
       batch.update(truckRef, { status: 'Available' });
       const driverRef = doc(db, 'drivers', trip.driverId);
       batch.update(driverRef, { status: 'Available' });
+      if (trip.secondDriverId) {
+        const secondDriverRef = doc(db, 'drivers', trip.secondDriverId);
+        batch.update(secondDriverRef, { status: 'Available' });
+      }
     }
     const tripRef = doc(db, 'trips', trip.id);
     batch.delete(tripRef);

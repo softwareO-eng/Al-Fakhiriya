@@ -22,7 +22,12 @@ import {
   XCircle,
   HelpCircle,
   SendHorizontal,
-  Trash2
+  Trash2,
+  FileSpreadsheet,
+  Users,
+  UserPlus,
+  Table as TableIcon,
+  LayoutList
 } from 'lucide-react';
 
 import { Truck, Driver, Trip, CustomFirebaseConfig } from './types';
@@ -51,6 +56,8 @@ import ConfirmModal from './components/ConfirmModal';
 import MapDirectionLink from './components/MapDirectionLink';
 import KeyDiagnosticsModal from './components/KeyDiagnosticsModal';
 import AlFakhriLogo from './components/AlFakhriLogo';
+import KftLogo from './components/KftLogo';
+import ExcelReportModal from './components/ExcelReportModal';
 import predefinedFirebaseConfig from '../firebase-applet-config.json';
 
 // Memory fallback for localStorage variables to prevent SecurityError crashes inside iframe environments
@@ -124,9 +131,11 @@ export default function App() {
   
   const [selectedTruck, setSelectedTruck] = useState<Truck | null>(null);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [selectedSecondDriver, setSelectedSecondDriver] = useState<Driver | null>(null);
   
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isAssignOpen, setIsAssignOpen] = useState(false);
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
@@ -138,6 +147,7 @@ export default function App() {
   // History Filter
   const [historyFilter, setHistoryFilter] = useState<'Daily' | 'Weekly' | 'Monthly' | 'All' | 'Custom'>('All');
   const [historyCustomDate, setHistoryCustomDate] = useState<string>(''); // YYYY-MM-DD
+  const [logViewMode, setLogViewMode] = useState<'table' | 'cards'>('table');
 
   const [localFallbackActive, setLocalFallbackActive] = useState<boolean>(false);
   const configToUse = localFallbackActive ? null : firebaseConfig;
@@ -247,16 +257,40 @@ export default function App() {
     setErrorMessage(null);
     setSelectedTruck(null);
     setSelectedDriver(null);
+    setSelectedSecondDriver(null);
+  };
+
+  // Driver selection toggle with support for primary & second driver
+  const handleDriverSelect = (driver: Driver) => {
+    if (selectedDriver?.id === driver.id) {
+      // Deselect primary driver; promote second driver if present
+      setSelectedDriver(selectedSecondDriver);
+      setSelectedSecondDriver(null);
+    } else if (selectedSecondDriver?.id === driver.id) {
+      // Deselect second driver
+      setSelectedSecondDriver(null);
+    } else if (!selectedDriver) {
+      // Select as primary driver
+      setSelectedDriver(driver);
+    } else if (!selectedSecondDriver) {
+      // Primary is selected, select as second driver!
+      setSelectedSecondDriver(driver);
+    } else {
+      // Both selected, replace second driver
+      setSelectedSecondDriver(driver);
+    }
   };
 
   // Assign route
-  const handleConfirmAssignment = async (from: string, to: string) => {
+  const handleConfirmAssignment = async (from: string, to: string, secondDriver?: Driver | null) => {
     if (!selectedTruck || !selectedDriver) return;
     try {
-      await assignTrip(configToUse, selectedDriver, selectedTruck, from, to);
+      const coDriver = secondDriver !== undefined ? secondDriver : selectedSecondDriver;
+      await assignTrip(configToUse, selectedDriver, selectedTruck, from, to, coDriver);
       setIsAssignOpen(false);
       setSelectedTruck(null);
       setSelectedDriver(null);
+      setSelectedSecondDriver(null);
     } catch (err) {
       alert(`Assignment failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -266,6 +300,7 @@ export default function App() {
     setIsAssignOpen(false);
     setSelectedTruck(null);
     setSelectedDriver(null);
+    setSelectedSecondDriver(null);
   };
 
   // Complete route
@@ -604,29 +639,49 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
         </div>
 
         {/* Selection HUD Panel */}
-        {(selectedTruck || selectedDriver) && (
-          <div id="matching-stage-hud" className="bg-indigo-900/90 backdrop-blur-md text-white px-6 py-4 rounded-2xl border border-indigo-950 flex flex-col md:flex-row md:items-center justify-between gap-4 max-w-4xl mx-auto shadow-md animate-in slide-in-from-top-6 duration-200">
+        {(selectedTruck || selectedDriver || selectedSecondDriver) && (
+          <div id="matching-stage-hud" className="bg-slate-900/95 backdrop-blur-md text-white px-6 py-4 rounded-2xl border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4 max-w-5xl mx-auto shadow-xl animate-in slide-in-from-top-6 duration-200">
             <div className="flex items-center space-x-4">
-              <div className="p-3 bg-indigo-950/80 rounded-xl relative">
+              <div className="p-3 bg-indigo-950/90 rounded-xl relative border border-indigo-700/50">
                 <SendHorizontal className="h-5 w-5 text-indigo-400 animate-pulse" />
               </div>
               <div>
-                <p className="text-xs font-mono font-medium text-indigo-300 uppercase tracking-widest">Active Dispatch Blueprint</p>
-                <div className="flex flex-wrap items-center gap-2 mt-1 text-sm font-semibold">
+                <p className="text-xs font-mono font-medium text-indigo-300 uppercase tracking-widest">Active Dispatch Staging</p>
+                <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs sm:text-sm font-semibold">
                   {selectedTruck ? (
-                    <span className="bg-indigo-950 px-2.5 py-1 rounded-md text-emerald-400 border border-indigo-800">
+                    <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-emerald-400 border border-slate-700">
                       🚛 {selectedTruck.id} ({selectedTruck.name})
                     </span>
                   ) : (
-                    <span className="text-indigo-300 animate-pulse">Select available Rig...</span>
+                    <span className="text-slate-400 italic">Select Rig...</span>
                   )}
-                  <span className="text-indigo-400">➔</span>
+                  <span className="text-indigo-400 font-mono">➔</span>
                   {selectedDriver ? (
-                    <span className="bg-indigo-950 px-2.5 py-1 rounded-md text-yellow-400 border border-indigo-800">
-                      👔 {selectedDriver.name}
+                    <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-amber-300 border border-slate-700">
+                      👔 Lead: {selectedDriver.name}
                     </span>
                   ) : (
-                    <span className="text-indigo-300 animate-pulse">Select available Pilot...</span>
+                    <span className="text-slate-400 italic">Select Lead Pilot...</span>
+                  )}
+                  {selectedSecondDriver && (
+                    <>
+                      <span className="text-emerald-400 font-mono">+</span>
+                      <span className="bg-emerald-950/80 px-2.5 py-1 rounded-lg text-emerald-300 border border-emerald-700 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Co-Pilot: {selectedSecondDriver.name}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSecondDriver(null);
+                          }}
+                          className="text-emerald-400 hover:text-white font-bold ml-1 text-xs cursor-pointer"
+                          title="Remove Co-Pilot"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    </>
                   )}
                 </div>
               </div>
@@ -638,15 +693,16 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                 onClick={() => {
                   setSelectedTruck(null);
                   setSelectedDriver(null);
+                  setSelectedSecondDriver(null);
                 }}
-                className="px-4 py-2 border border-indigo-700 hover:bg-indigo-950 rounded-xl text-xs font-semibold transition-colors"
+                className="px-3.5 py-2 border border-slate-700 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
               >
                 Clear Selection
               </button>
               {selectedTruck && !selectedDriver && selectedTruck.status === 'Available' && (
                 <button
                   onClick={() => handleSetTruckStatus(selectedTruck.id, 'Maintenance')}
-                  className="bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-xl text-xs font-semibold text-slate-950 shadow-sm transition-all"
+                  className="bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-xl text-xs font-semibold text-slate-950 shadow-sm transition-all cursor-pointer"
                 >
                   🛠️ Send to Maintenance
                 </button>
@@ -655,13 +711,13 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleSetDriverStatus(selectedDriver.id, 'Medical Leave')}
-                    className="bg-rose-500 hover:bg-rose-600 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-all"
+                    className="bg-rose-500 hover:bg-rose-600 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-all cursor-pointer"
                   >
                     🩺 Medical Leave
                   </button>
                   <button
                     onClick={() => handleSetDriverStatus(selectedDriver.id, 'Off Duty')}
-                    className="bg-sky-600 hover:bg-sky-700 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm"
+                    className="bg-sky-600 hover:bg-sky-700 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm cursor-pointer"
                   >
                     💤 Off Duty
                   </button>
@@ -671,9 +727,12 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                 <button
                   id="open-assignment-direct"
                   onClick={() => setIsAssignOpen(true)}
-                  className="bg-emerald-500 hover:bg-emerald-600 px-5 py-2 rounded-xl text-xs font-bold text-slate-950 shadow-sm transition-transform active:scale-98"
+                  className="bg-emerald-500 hover:bg-emerald-600 px-5 py-2 rounded-xl text-xs font-bold text-slate-950 shadow-sm transition-transform active:scale-98 cursor-pointer flex items-center gap-1.5"
                 >
-                  Configure Stops
+                  <SendHorizontal className="h-3.5 w-3.5" />
+                  <span>
+                    {selectedSecondDriver ? 'Dispatch Rig (2 Pilots)' : 'Dispatch Rig (1 Pilot)'}
+                  </span>
                 </button>
               )}
             </div>
@@ -819,14 +878,40 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
 
             {/* AVAILABLE DRIVERS SECTION */}
             <div id="available-drivers-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
                 <div className="flex items-center space-x-2">
                   <DriverIcon className="text-slate-700 h-4.5 w-4.5" />
                   <h2 className="font-bold text-slate-900 tracking-tight text-sm">Available drivers</h2>
+                  <span className="bg-slate-100 text-slate-800 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full">
+                    {availableDrivers.length}
+                  </span>
                 </div>
-                <span className="bg-slate-100 text-slate-800 text-[11px] font-mono font-bold px-2 py-0.5 rounded-full">
-                  {availableDrivers.length}
-                </span>
+
+                {(selectedDriver || selectedSecondDriver) && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-slate-400 text-[11px]">Selected:</span>
+                    {selectedDriver && (
+                      <span className="bg-indigo-50 border border-indigo-200 text-indigo-800 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1">
+                        <span>1. Lead: {selectedDriver.name}</span>
+                      </span>
+                    )}
+                    {selectedSecondDriver && (
+                      <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1">
+                        <span>2. Co-Pilot: {selectedSecondDriver.name}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSecondDriver(null);
+                          }}
+                          className="hover:text-rose-600 font-bold ml-0.5 cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {availableDrivers.length === 0 ? (
@@ -835,29 +920,38 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                   <p className="text-[10px] mt-0.5">Wait for active arrivals or hire custom pilots above.</p>
                 </div>
               ) : (
-                <div id="available-drivers-grid" className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-9 xl:grid-cols-12 2xl:grid-cols-16 gap-1 pr-1">
+                <div id="available-drivers-grid" className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-1.5 pr-1">
                   {availableDrivers.map((driver) => {
-                    const isSelected = selectedDriver?.id === driver.id;
+                    const isLead = selectedDriver?.id === driver.id;
+                    const isCoPilot = selectedSecondDriver?.id === driver.id;
                     return (
                       <div
                         key={driver.id}
                         id={`driver-card-${driver.id}`}
-                        onClick={() => setSelectedDriver(isSelected ? null : driver)}
-                        className={`p-1 rounded md:rounded-md border cursor-pointer select-none transition-all ${
-                          isSelected
-                            ? 'bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500/20'
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                        onClick={() => handleDriverSelect(driver)}
+                        className={`p-2 rounded-xl border cursor-pointer select-none transition-all flex flex-col justify-between ${
+                          isLead
+                            ? 'bg-indigo-50/90 border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs'
+                            : isCoPilot
+                            ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                            : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300'
                         }`}
                       >
                         <div className="flex items-start justify-between min-w-0">
-                           <div className="flex-1 min-w-0 pr-0.5">
-                            <div className="font-bold text-slate-900 text-[9px] truncate leading-tight">{driver.name}</div>
-                            <div className="font-mono text-[8px] text-slate-500 truncate leading-tight">{driver.id}</div>
-                            <div className="font-mono text-[8px] text-slate-500 truncate leading-tight">CDL: {driver.licenseNumber}</div>
+                          <div className="flex-1 min-w-0 pr-1">
+                            <div className="font-bold text-slate-900 text-[11px] truncate leading-tight">{driver.name}</div>
+                            <div className="font-mono text-[9px] text-slate-500 truncate leading-tight mt-0.5">{driver.id}</div>
+                            <div className="font-mono text-[9px] text-slate-500 truncate leading-tight">CDL: {driver.licenseNumber}</div>
                           </div>
-                          <div className="flex flex-col items-end gap-0.5 shrink-0">
-                            {isSelected ? (
-                              <CheckCircle className="w-3 h-3 text-indigo-600" />
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            {isLead ? (
+                              <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded font-mono">
+                                1. Lead
+                              </span>
+                            ) : isCoPilot ? (
+                              <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded font-mono">
+                                2. Co-Pilot
+                              </span>
                             ) : (
                               <button
                                 type="button"
@@ -865,7 +959,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                                 onClick={(e) => handleDeleteDriver(driver.id, e)}
                                 className="text-slate-300 hover:text-rose-600 transition-colors cursor-pointer"
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
@@ -1007,9 +1101,25 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                             <span className="text-[11px] text-slate-500 font-medium truncate block">{trip.truckName}</span>
                           </div>
                           <div>
-                            <span className="block text-[10px] font-mono text-slate-400 font-medium font-bold">PILOT</span>
-                            <span className="font-bold text-slate-800 truncate block">{trip.driverName}</span>
-                            <span className="text-[10px] text-slate-400 font-mono truncate block">ID: {trip.driverId}</span>
+                            <div className="flex items-center justify-between">
+                              <span className="block text-[10px] font-mono text-slate-400 font-bold">
+                                {trip.secondDriverName ? 'PILOTS (DUAL)' : 'PILOT'}
+                              </span>
+                              {trip.secondDriverName && (
+                                <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.2 rounded font-mono">
+                                  2 Pilots
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-bold text-slate-800 truncate block">1. {trip.driverName}</span>
+                            {trip.secondDriverName && (
+                              <span className="font-bold text-emerald-700 truncate block text-[11px]">
+                                2. {trip.secondDriverName}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-slate-400 font-mono truncate block">
+                              ID: {trip.driverId} {trip.secondDriverId ? `• ${trip.secondDriverId}` : ''}
+                            </span>
                           </div>
                         </div>
 
@@ -1078,15 +1188,57 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                   <h2 className="font-bold text-slate-900 tracking-tight text-sm">History Log</h2>
                 </div>
                 
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 w-full sm:w-auto">
-                  <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* View Mode Switcher: Table vs Cards */}
+                  <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200/60">
+                    <button
+                      type="button"
+                      onClick={() => setLogViewMode('table')}
+                      title="Table Manifest View"
+                      className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                        logViewMode === 'table'
+                          ? 'bg-white text-indigo-700 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <TableIcon className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Table</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLogViewMode('cards')}
+                      title="Cards View"
+                      className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                        logViewMode === 'cards'
+                          ? 'bg-white text-indigo-700 shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <LayoutList className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Cards</span>
+                    </button>
+                  </div>
+
+                  {/* Excel Report Export Trigger */}
+                  <button
+                    type="button"
+                    id="history-export-excel-button"
+                    onClick={() => setIsExcelModalOpen(true)}
+                    className="inline-flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <FileSpreadsheet className="h-3.5 w-3.5" />
+                    <span>Export Excel</span>
+                  </button>
+
+                  {/* Timeframe Filter Buttons */}
+                  <div className="flex bg-slate-100 p-0.5 rounded-lg shrink-0">
                     {['Daily', 'Weekly', 'Monthly', 'Custom', 'All'].map(filter => (
                       <button
                         key={filter}
                         onClick={() => setHistoryFilter(filter as any)}
-                        className={`text-xs px-3 py-1.5 rounded-md font-medium transition-colors ${
+                        className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
                           historyFilter === filter 
-                            ? 'bg-white text-slate-800 shadow-sm' 
+                            ? 'bg-white text-slate-800 shadow-2xs font-semibold' 
                             : 'text-slate-500 hover:text-slate-700'
                         }`}
                       >
@@ -1094,16 +1246,18 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                       </button>
                     ))}
                   </div>
+
                   {historyFilter === 'Custom' && (
                     <input 
                       type="date" 
                       value={historyCustomDate}
                       onChange={(e) => setHistoryCustomDate(e.target.value)}
-                      className="text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 bg-white"
+                      className="text-xs border border-slate-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-700 bg-white"
                     />
                   )}
-                  <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-lg shrink-0 transition-all">
-                    {displayedCompletedTrips.length} Trips
+
+                  <span className="bg-indigo-50 border border-indigo-100 text-indigo-700 text-[11px] font-mono font-bold px-2 py-1 rounded-lg shrink-0">
+                    {displayedCompletedTrips.length} Runs
                   </span>
                 </div>
               </div>
@@ -1113,7 +1267,79 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                   <p>No historical runs match the selected filter.</p>
                   <p className="text-[10px] mt-0.5">Completed transits appear logged here for audit trails.</p>
                 </div>
+              ) : logViewMode === 'table' ? (
+                /* TABULAR MANIFEST VIEW */
+                <div id="completed-logs-table-container" className="overflow-x-auto overflow-y-auto flex-1 border border-slate-200 rounded-xl max-h-[460px]">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-mono text-[10px] uppercase sticky top-0 z-10 border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3 font-semibold">Trip ID</th>
+                        <th className="py-2.5 px-3 font-semibold">Delivered Time</th>
+                        <th className="py-2.5 px-3 font-semibold">Assigned Rig</th>
+                        <th className="py-2.5 px-3 font-semibold">Lead Pilot</th>
+                        <th className="py-2.5 px-3 font-semibold">Co-Pilot</th>
+                        <th className="py-2.5 px-3 font-semibold">Origin ➔ Destination</th>
+                        <th className="py-2.5 px-3 font-semibold text-center">Status</th>
+                        <th className="py-2.5 px-3 font-semibold text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {displayedCompletedTrips.map((log) => (
+                        <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-900 text-[11px] whitespace-nowrap">
+                            {log.id}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-slate-500 text-[10px] whitespace-nowrap">
+                            {formatDate(log.completedTime || '')}
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className="font-bold text-slate-900 font-mono text-[11px] block">{log.truckId}</span>
+                            <span className="text-slate-400 text-[10px] block truncate max-w-[120px]">{log.truckName}</span>
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className="font-semibold text-slate-800 block text-xs">{log.driverName}</span>
+                            <span className="text-slate-400 font-mono text-[9px] block">ID: {log.driverId}</span>
+                          </td>
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            {log.secondDriverName ? (
+                              <div>
+                                <span className="font-semibold text-emerald-800 block text-xs">{log.secondDriverName}</span>
+                                <span className="text-emerald-600 font-mono text-[9px] block">ID: {log.secondDriverId}</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">— Solo —</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="font-medium text-slate-800 text-xs truncate max-w-[200px]" title={`${log.from} ➔ ${log.to}`}>
+                              <span className="text-indigo-600 font-semibold">{log.from}</span>
+                              <span className="text-slate-400 mx-1">➔</span>
+                              <span className="text-emerald-700 font-semibold">{log.to}</span>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                            <span className="inline-block bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                              Delivered
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                            <button
+                              type="button"
+                              id={`delete-table-log-button-${log.id}`}
+                              title="Delete Historical Log"
+                              onClick={(e) => handleDeleteTrip(log, e)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
+                /* CARDS VIEW */
                 <div id="completed-logs-list" className="space-y-4 overflow-y-auto pr-2 flex-1 pb-2">
                   {completedTripsDates.map((dateGroup) => (
                     <div key={dateGroup} className="space-y-2">
@@ -1138,8 +1364,13 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                               <p className="font-semibold text-slate-900 truncate">
                                 {log.from} ➔ {log.to}
                               </p>
-                              <div className="text-[10px] text-slate-500 font-mono">
-                                Rig: <strong>{log.truckId}</strong> | Driver: <strong>{log.driverName}</strong>
+                              <div className="text-[10px] text-slate-600 font-mono">
+                                Rig: <strong>{log.truckId}</strong> | Pilot: <strong>{log.driverName}</strong>
+                                {log.secondDriverName && (
+                                  <span className="text-emerald-700 font-semibold ml-1.5">
+                                    + Co-Pilot: <strong>{log.secondDriverName}</strong>
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono mt-1">
                                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-slate-300"></span>
@@ -1190,10 +1421,20 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
           isOpen={isAssignOpen}
           driver={selectedDriver}
           truck={selectedTruck}
+          coDriver={selectedSecondDriver}
+          availableDrivers={availableDrivers}
           onConfirm={handleConfirmAssignment}
           onCancel={handleCancelAssignment}
         />
       )}
+
+      {/* Excel Report Export Dialog Modal */}
+      <ExcelReportModal
+        isOpen={isExcelModalOpen}
+        onClose={() => setIsExcelModalOpen(false)}
+        trips={trips}
+        trucks={trucks}
+      />
 
       {/* Add New Driver / Truck Dialog */}
       <AddAssetModal
