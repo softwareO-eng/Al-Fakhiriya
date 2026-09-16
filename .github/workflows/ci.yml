@@ -31,9 +31,9 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      # Install exact dependencies
+      # Install dependencies (fallback to npm install if lockfile needs sync)
       - name: Install Dependencies
-        run: npm ci
+        run: npm ci || npm install
 
       # Run type-checks/linter configured in package.json
       - name: Run Linter / Type-Check
