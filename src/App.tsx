@@ -32,7 +32,8 @@ import {
   Eye,
   LogOut,
   Lock,
-  MoreVertical
+  MoreVertical,
+  Calendar
 } from 'lucide-react';
 
 import { Truck, Driver, Trip, CustomFirebaseConfig, AppUser, MonthlyAssignment } from './types';
@@ -69,6 +70,7 @@ import KeyDiagnosticsModal from './components/KeyDiagnosticsModal';
 import AlFakhriLogo from './components/AlFakhriLogo';
 import KftLogo from './components/KftLogo';
 import ExcelReportModal from './components/ExcelReportModal';
+import MonthlyAssignmentModal from './components/MonthlyAssignmentModal';
 import LoginModal from './components/LoginModal';
 import UserManagementModal from './components/UserManagementModal';
 import predefinedFirebaseConfig from '../firebase-applet-config.json';
@@ -876,12 +878,23 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                 Clear Selection
               </button>
               {isAdmin && selectedTruck && !selectedDriver && selectedTruck.status === 'Available' && (
-                <button
-                  onClick={() => handleSetTruckStatus(selectedTruck.id, 'Maintenance')}
-                  className="bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-xl text-xs font-semibold text-slate-950 shadow-sm transition-all cursor-pointer"
-                >
-                  🛠️ Send to Maintenance
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleSetTruckStatus(selectedTruck.id, 'Maintenance')}
+                    className="bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-xl text-xs font-semibold text-slate-950 shadow-sm transition-all cursor-pointer"
+                  >
+                    🛠️ Send to Maintenance
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTruckForMonthly(selectedTruck);
+                      setIsMonthlyModalOpen(true);
+                    }}
+                    className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-sm transition-all cursor-pointer"
+                  >
+                    📅 Send to Monthly
+                  </button>
+                </div>
               )}
               {isAdmin && selectedDriver && !selectedTruck && selectedDriver.status === 'Available' && (
                 <div className="flex items-center gap-2">
@@ -1247,6 +1260,65 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                 </div>
               )}
             </div>
+
+            {/* MONTHLY ASSIGNMENTS */}
+            {monthlyAssignments.length > 0 && (
+              <div id="monthly-assignments-container" className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="text-blue-600 h-4 w-4" />
+                    <h2 className="font-bold text-slate-900 tracking-tight text-sm">Monthly Assignments</h2>
+                  </div>
+                  <div className="flex bg-slate-100 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-slate-800 gap-1.5">
+                    <span>📅 {monthlyAssignments.length} Rigs</span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {monthlyAssignments.map(assignment => (
+                    <div key={assignment.id} className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex flex-col justify-between space-y-3">
+                      <div>
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="font-bold text-slate-900 font-mono text-[11px]">{assignment.truckId}</span>
+                          <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">Monthly</span>
+                        </div>
+                        <div className="text-[11px] font-medium text-slate-800 mb-2 truncate">{assignment.truckName}</div>
+                        
+                        <div className="space-y-1 mt-2 border-t border-blue-100 pt-2">
+                          <div className="text-[10px] text-slate-600 flex justify-between">
+                            <span className="font-medium text-slate-400">Company:</span>
+                            <span className="font-semibold text-slate-700 truncate max-w-[120px]">{assignment.companyName}</span>
+                          </div>
+                          <div className="text-[10px] text-slate-600 flex justify-between">
+                            <span className="font-medium text-slate-400">Start Date:</span>
+                            <span className="font-semibold text-slate-700">{assignment.startDate}</span>
+                          </div>
+                          {assignment.monthlyRate && (
+                            <div className="text-[10px] text-slate-600 flex justify-between">
+                              <span className="font-medium text-slate-400">Rate:</span>
+                              <span className="font-semibold text-slate-700">{assignment.monthlyRate}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {isAdmin ? (
+                        <button
+                          onClick={() => handleRemoveMonthly(assignment)}
+                          className="w-full mt-2 text-center bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-200 font-semibold py-1.5 rounded-lg text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          End Monthly Assignment
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-blue-700/80 font-mono text-center block pt-1 border-t border-blue-100 mt-2">
+                          Active Assignment
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
           </div>
 
@@ -1640,6 +1712,19 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
           availableDrivers={availableDrivers}
           onConfirm={handleConfirmAssignment}
           onCancel={handleCancelAssignment}
+        />
+      )}
+
+      {/* Monthly Assignment Modal */}
+      {isAdmin && (
+        <MonthlyAssignmentModal
+          isOpen={isMonthlyModalOpen}
+          truck={truckForMonthly}
+          onClose={() => {
+            setIsMonthlyModalOpen(false);
+            setTruckForMonthly(null);
+          }}
+          onConfirm={handleConfirmMonthlyAssignment}
         />
       )}
 
