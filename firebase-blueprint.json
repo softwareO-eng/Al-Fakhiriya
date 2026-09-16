@@ -54,6 +54,22 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "username", "role"]
+    },
+    "monthly_assignment": {
+      "title": "Monthly Assignment",
+      "description": "A truck assigned to a company on a monthly basis",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "truckId": { "type": "string", "description": "ID of the assigned truck" },
+        "truckName": { "type": "string", "description": "Name of the assigned truck" },
+        "companyName": { "type": "string", "description": "Name of the company" },
+        "startDate": { "type": "string", "description": "Start date" },
+        "monthlyRate": { "type": "string", "description": "Monthly rate" },
+        "notes": { "type": "string", "description": "Notes" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "truckId", "truckName", "companyName", "startDate"]
     }
   },
   "firestore": {
@@ -68,6 +84,10 @@
     "trips": {
       "schema": "trip",
       "description": "Active and completed trips assigned to drivers and trucks"
+    },
+    "monthly_assignments": {
+      "schema": "monthly_assignment",
+      "description": "Active monthly assignments of trucks to companies"
     },
     "users": {
       "schema": "user",

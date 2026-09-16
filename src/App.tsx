@@ -1307,6 +1307,7 @@ const firebaseConfig = ${configPlaceholderString};</code></pre>
                           onClick={() => handleRemoveMonthly(assignment)}
                           className="w-full mt-2 text-center bg-white hover:bg-rose-50 text-rose-600 hover:text-rose-700 border border-rose-200 font-semibold py-1.5 rounded-lg text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1"
                         >
+                          <Trash2 className="w-3.5 h-3.5" />
                           End Monthly Assignment
                         </button>
                       ) : (
